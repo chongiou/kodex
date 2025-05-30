@@ -1,0 +1,13 @@
+{
+  "delay": 2000,
+  "polling-interval": 2000,
+  "watch": [
+    "src/**/*"
+  ],
+  "ext": "*",
+  "ignore": [
+    "dist",
+    "node_modules"
+  ],
+  "exec": "npm run build:test && npm run push:test"
+}

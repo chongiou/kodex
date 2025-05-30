@@ -1,0 +1,35 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Run tsx",
+      "type": "node",
+      "request": "launch",
+      "program": "${file}",
+      "runtimeExecutable": "tsx",
+      "console": "internalConsole",
+      "internalConsoleOptions": "openOnFirstSessionStart",
+      "skipFiles": [
+        "<node_internals>/**",
+        "**/node_modules/**",
+        "**/type.ts",
+        "**/wasm/**",
+      ],
+      "env": {
+        "NODE_ENV": "development",
+      }
+    },
+    {
+      "name": "Attach to process",
+      "type": "node",
+      "request": "attach",
+      "port": 9229,
+      "skipFiles": [
+        // Node.js internal core modules
+        "<node_internals>/**",
+        // Ignore all dependencies
+        "${workspaceFolder}/node_modules/**",
+      ],
+    }
+  ]
+}
