@@ -1,0 +1,55 @@
+{
+  "name": "kodex",
+  "version": "1.0.0",
+  "publishConfig": {
+    "access": "public"
+  },
+  "main": "./lib/index.cjs",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js",
+      "require": "./lib/index.cjs"
+    },
+    "./jsx-runtime": {
+      "types": "./lib/index.d.ts",
+      "import": "./lib/index.js",
+      "require": "./lib/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib"
+  ],
+  "description": "Create ui in zdjl platform",
+  "keywords": [
+    "zdjl",
+    "ui",
+    "jsx",
+    "element",
+    "component"
+  ],
+  "license": "MIT",
+  "author": "重楼 <chongiou@qq.com>",
+  "type": "module",
+  "scripts": {
+    "build:dts": "dts-bundle-generator --inline-declare-global -o lib/index.d.ts src/index.ts",
+    "build": "vite build && npm run build:dts",
+    "test:build": "vite build --mode test",
+    "test:watch": "nodemon",
+    "test:push": "node --import tsx scripts/push.ts dist/kodex.test.zjs to sdcard/自动精灵 ",
+    "prerelease": "npm version prerelease --preid=beta && git push origin main --tags",
+    "postversion": "git push origin main --tags"
+  },
+  "devDependencies": {
+    "@types/node": "^22.14.1",
+    "@vitejs/plugin-react": "^4.4.1",
+    "dts-bundle-generator": "^9.5.1",
+    "nodemon": "^3.1.10",
+    "terser": "^5.39.2",
+    "tsx": "^4.19.3",
+    "vite": "^6.3.3",
+    "vite-mjs-to-zjs": "^1.0.2"
+  }
+}
