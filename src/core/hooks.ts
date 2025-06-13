@@ -1,7 +1,7 @@
-import type { AdapterContext, HookFunction } from "./renderer"
+import type { PropertyAdapterContext, HookFunction } from "./renderer"
 
 /**条件应用钩子, false分支默认返回原值 */
-export const createConditionalHook = (condition: (value: any, context: AdapterContext) => boolean, trueHook?: HookFunction, falseHook?: HookFunction): HookFunction => {
+export const createConditionalHook = (condition: (value: any, context: PropertyAdapterContext) => boolean, trueHook?: HookFunction, falseHook?: HookFunction): HookFunction => {
   return (value, context) => {
     if (condition(value, context)) {
       return trueHook ? trueHook(value, context) : value

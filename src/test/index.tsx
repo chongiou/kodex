@@ -1,4 +1,4 @@
-import { render } from "@/core"
+import { registerBuiltinProcessors, render, Renderer } from "@/core"
 import { createSignal } from "@/core/reactive"
 import { dir } from "@/utils"
 
@@ -36,11 +36,21 @@ const RootComponent2 = () => {
 
 
 if (typeof zdjl !== 'undefined') {
-  const component = await render(<RootComponent />)
-  const component2 = await render(<RootComponent2 />)
-  await component.show()
-  await component2.show()
+  const renderer = new Renderer()
+  registerBuiltinProcessors(renderer)
+  console.time('render')
+  const component = renderer.render(<RootComponent />)
+  console.timeEnd('render')
+
+  console.time('render2')
+  const component2 = renderer.render(<RootComponent2 />)
+  console.timeEnd('render2')
+
+  console.time('show')
+  component.show()
+  component2.show()
+  console.timeEnd('show')
 } else {
-  const dialog = await render(<RootComponent />)
+  const dialog = render(<RootComponent />)
   dir(dialog.vars)
 }

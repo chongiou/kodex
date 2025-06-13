@@ -10,35 +10,35 @@ declare const zdjl: any
 
 // 渲染上下文 - 管理渲染状态
 class RenderContext {
-  private eventPool = new Map<string, Function>()
-  private hooks = new Map<string, Function>()
-  private varCounter = 0
+  private eventListenerPool = new Map<string, Function>()
+  private renderHooks = new Map<string, Function>()
+  private variableCounter = 0
 
-  public cleanupPlan = new Set<Function>()
-  public reserved = new Map<string, string>()
-  public currentPath = 'view'
+  public cleanupFunctions = new Set<Function>()
+  public reservedVariableNames = new Map<string, string>()
+  public currentVariablePath = 'view'
   public isUserCancel = true
-  public exprForGetDialogContext: string = ''
-  public signalDerivedProperties: string[] = []
+  public dialogContextExpression: string = ''
+  public reactiveDerivedProperties: string[] = []
   public SCOPE = { method: `kodex.method.${generateUniqueId()}`, signal: `kodex.signal.${generateUniqueId()}` } as const
 
-  generateVarname(): string {
-    return `var$${++this.varCounter}`
+  generateVariableName(): string {
+    return `var$${++this.variableCounter}`
   }
 
-  saveEvent(eventListener: Function, varname: string): void {
-    this.eventPool.set(`${this.currentPath}.${varname}`, eventListener)
+  saveEventListener(eventListener: Function, varname: string): void {
+    this.eventListenerPool.set(`${this.currentVariablePath}.${varname}`, eventListener)
   }
 
   saveHooks(hooks: RendererHooks): void {
     for (const [key, value] of Object.entries(hooks)) {
       if (typeof value === 'function') {
-        this.hooks.set(key, value)
+        this.renderHooks.set(key, value)
       }
     }
   }
 
-  getDialogContext(): DialogContext {
+  createDialogContext(): DialogContext {
     const self = this
     return {
       reload() {
@@ -52,14 +52,14 @@ class RenderContext {
   }
 
   cleanup(): void {
-    this.cleanupPlan.forEach(fn => fn())
-    this.cleanupPlan.clear()
-    this.eventPool.clear()
-    this.hooks.clear()
-    this.reserved.clear()
+    this.cleanupFunctions.forEach(fn => fn())
+    this.cleanupFunctions.clear()
+    this.eventListenerPool.clear()
+    this.renderHooks.clear()
+    this.reservedVariableNames.clear()
   }
 
-  createEventEmitter() {
+  createValueChangeEmitter() {
     // (重要)必须给予变量默认值, 否则无法检测值前后变化!
     const debug = true
     let initialized = false
@@ -69,7 +69,7 @@ class RenderContext {
       if (!initialized) {
         initialized = true
         // 不使用可选链是为了兼容 zdjl 环境
-        const dialogCreatedHook = this.hooks.get('dialogCreated')
+        const dialogCreatedHook = this.renderHooks.get('dialogCreated')
         dialogCreatedHook && dialogCreatedHook()
         oldValue = JSON.parse(JSON.stringify(newValue))
         return
@@ -80,8 +80,8 @@ class RenderContext {
         oldValue = JSON.parse(JSON.stringify(newValue))
         diff.forEach(change => {
           const path = `view.${change.path}`
-          const eventListener = this.eventPool.get(path)
-          eventListener && eventListener({ ...change, ...this.getDialogContext() })
+          const eventListener = this.eventListenerPool.get(path)
+          eventListener && eventListener({ ...change, ...this.createDialogContext() })
         })
       }
     }
@@ -91,20 +91,20 @@ class RenderContext {
 
 // 响应处理器 - 处理响应式相关
 class ReactiveProcessor {
-  constructor(private context: RenderContext, private debug = false) { }
+  constructor(private renderContext: RenderContext, private debug = false) { }
   hoistSignal(signalGetter: SignalGetter): { id: string, expr: string } {
     const name = generateUniqueId()
     const cleanup = createEffect(() => {
       const val = signalGetter()
-      this.hoist(name, val, this.context!.SCOPE.signal)
+      this.hoist(name, val, this.renderContext!.SCOPE.signal)
     })
-    this.context.cleanupPlan.add(cleanup)
-    return { id: name, expr: `zdjl.getVar('${name}','${this.context.SCOPE.signal}')` }
+    this.renderContext.cleanupFunctions.add(cleanup)
+    return { id: name, expr: `zdjl.getVar('${name}','${this.renderContext.SCOPE.signal}')` }
   }
 
   hoistFunc(fn: Function): { id: string, expr: string } {
     const name = generateUniqueId()
-    return this.hoist(name, fn, this.context.SCOPE.method)
+    return this.hoist(name, fn, this.renderContext.SCOPE.method)
   }
 
   processText(val: any): [boolean, string] {
@@ -145,24 +145,34 @@ export interface DialogContext {
   closeDialog(): void
 }
 
+// 渲染会话 - 用于存储状态
+interface RenderSession {
+  context: RenderContext
+  reactiveProcessor: ReactiveProcessor
+}
+
 // 渲染器 - 协调渲染流程
 export class Renderer {
-  private processors: ElementConverter[] = []
-  public reactiveProcessor: ReactiveProcessor
-  public context: RenderContext
+  private converters: ElementConverter[] = []
 
-  constructor(debug = false) {
-    this.context = new RenderContext()
-    this.reactiveProcessor = new ReactiveProcessor(this.context, debug)
-
-    this.context.exprForGetDialogContext = this.reactiveProcessor.hoist(
-      generateUniqueId(),
-      this.context.getDialogContext(),
-      this.context.SCOPE.signal,
-    ).expr
+  constructor(private debug = false) {
   }
 
-  private handleComponent(elem: JSX.Element): Variable[] | Variable {
+  private createRenderSession(): RenderSession {
+    const context = new RenderContext()
+    const reactiveProcessor = new ReactiveProcessor(context, this.debug)
+
+    // 设置对话框上下文表达式
+    context.dialogContextExpression = reactiveProcessor.hoist(
+      generateUniqueId(),
+      context.createDialogContext(),
+      context.SCOPE.signal,
+    ).expr
+
+    return { context, reactiveProcessor }
+  }
+
+  private handleComponent(elem: JSX.Element, session: RenderSession): Variable[] | Variable {
     if (typeof elem.type !== 'function') {
       throw new Error(`The element is not a Component: ${elem.type}`)
     }
@@ -171,7 +181,7 @@ export class Renderer {
     const vars: Variable[] = []
     for (const element of elements) {
       if (!element) continue
-      const processed = this.processElement(element)
+      const processed = this.processElement(element, session)
       if (Array.isArray(processed)) {
         vars.push(...processed)
       } else if (processed) {
@@ -181,13 +191,13 @@ export class Renderer {
     return vars.length === 1 ? vars[0] : vars
   }
 
-  private processHeaderElement(elem: JSX.Element) {
+  private processHeaderElement(elem: JSX.Element, session: RenderSession) {
     const children = elem.props.children
-    const [isExpr, title] = this.reactiveProcessor.processText(children)
+    const [isExpr, title] = session.reactiveProcessor.processText(children)
     return { isExpr, title }
   }
 
-  private processFooterElement(elem: JSX.Element) {
+  private processFooterElement(elem: JSX.Element, session: RenderSession) {
     const result: {
       cancelText?: string,
       okText?: string,
@@ -198,14 +208,14 @@ export class Renderer {
     const children = [elem.props.children].flat()
     if (children[0]?.type === 'button') {
       const btn = children[0]
-      result.exprForCancelCallback = btn.props.onClick && `${this.reactiveProcessor.hoistFunc(btn.props.onClick).expr}()`
-      const [cancelTextIsExpr, cancelText] = this.reactiveProcessor.processText(btn.props.children)
+      result.exprForCancelCallback = btn.props.onClick && `${session.reactiveProcessor.hoistFunc(btn.props.onClick).expr}()`
+      const [cancelTextIsExpr, cancelText] = session.reactiveProcessor.processText(btn.props.children)
       result.cancelTextIsExpr = cancelTextIsExpr
       result.cancelText = cancelText
     }
     if (children[1]?.type === 'button') {
       const btn = children[1]
-      const [okTextIsExpr, okText] = this.reactiveProcessor.processText(btn.props.children)
+      const [okTextIsExpr, okText] = session.reactiveProcessor.processText(btn.props.children)
       result.okTextIsExpr = okTextIsExpr
       result.okText = okText
     }
@@ -248,59 +258,103 @@ export class Renderer {
     return [header, main, footer] as const
   }
 
-  registerProcessor(...processors: ElementConverter[]) {
-    this.processors.push(...processors)
+  registerConverter(...converter: ElementConverter[]) {
+    this.converters.push(...converter)
   }
 
-  processElement(elem: JSX.Element): Variable[] | Variable {
+  /**
+   * 处理元素
+   * @param elem 
+   * @param session 
+   * @returns 
+   */
+  processElement(elem: JSX.Element | string, session: RenderSession): Variable[] | Variable {
+    // 当元素为字符串,说明是文本节点,包装为文本元素再处理
+    if (typeof elem === 'string') {
+      elem = { type: 'text', props: { children: elem } }
+    }
     if (typeOf(elem) !== 'Object' || !elem.type) {
-      if (typeof elem === 'string') {
-        elem
-      }
       console.error({ elem })
       throw new Error(`值不合法`)
     }
     if (typeof elem.type === 'function') {
-      return this.handleComponent(elem)
+      return this.handleComponent(elem, session)
     }
-    const processor = this.processors.find(p => p.match(elem))
+    const processor = this.converters.find(p => p.match(elem))
     if (!processor) {
       throw new Error(`该类型未实现: ${elem.type}`)
     }
-    return processor.convertToVariable(elem, this)
+    return processor.convertToVariable(elem, this, session)
   }
 
-  // 存储ID用于记忆输入值，该ID在脚本范围内不可相同。如果该参数不提供的同时仍然开启记忆，不仅无效还会浪费存储空间
-  async render(rootComponent: JSX.Element, options: { storageId?: string, hooks?: RendererHooks } = {}) {
-    const {
-      storageId = typeof rootComponent.type === 'function' ? rootComponent.type.name : generateUniqueId(),
-      hooks = {}
-    } = options
+  /**
+   * 渲染对话框
+   * @param rootComponent 根组件
+   * @param options 选项
+   * @param options.storageId 存储ID,用于记忆输入值,该ID在脚本范围内不可相同。如果该参数不提供的同时仍然开启记忆,不仅无效还会浪费存储空间
+   * @param options.hooks 钩子,用于在对话框创建时执行一些操作
+   * @returns 对话框对象
+   */
+  render(rootComponent: JSX.Element, options: { storageId?: string, hooks?: RendererHooks } = {}) {
+    const session = this.createRenderSession()
+    const { storageId, hooks } = this.prepareRenderOptions(rootComponent, options)
+    
+    session.context.saveHooks(hooks)
+    const { viewId, eventEmitId } = this.setupSessionIds(storageId)
+    this.setupCleanupPlan(session, viewId, eventEmitId)
 
-    this.context.saveHooks(hooks)
+    const [headerElement, mainElement, footerElement] = this.extractRootElements(rootComponent)
+    const { header, main, footer } = this.processRootElements(headerElement, mainElement, footerElement, session)
+
+    const eventEmitter = session.context.createValueChangeEmitter()
+    const { expr: eventListenerFunc } = session.reactiveProcessor.hoistFunc(eventEmitter)
+
+    const vars = this.createVars(viewId, eventEmitId, main, eventListenerFunc)
+    const action = this.createAction(vars, header, footer)
+
+    return {
+      action,
+      vars: main,
+      show: () => this.showDialog(action, session, viewId)
+    }
+  }
+
+  private prepareRenderOptions(rootComponent: JSX.Element, options: { storageId?: string, hooks?: RendererHooks }) {
+    return {
+      storageId: options.storageId ?? (typeof rootComponent.type === 'function' ? rootComponent.type.name : generateUniqueId()),
+      hooks: options.hooks ?? {}
+    }
+  }
+
+  private setupSessionIds(storageId: string) {
     const viewId = `view$${storageId}`
     const eventEmitId = `eventEmit$${generateUniqueId()}`
-    this.context.cleanupPlan.add(() => {
+    return { viewId, eventEmitId }
+  }
+
+  private setupCleanupPlan(session: RenderSession, viewId: string, eventEmitId: string) {
+    session.context.cleanupFunctions.add(() => {
       sleep(50).then(() => {
-        zdjl.clearVars(this.context.SCOPE.method)
-        zdjl.clearVars(this.context.SCOPE.signal)
+        if (typeof zdjl === 'undefined') return
+        zdjl.clearVars(session.context.SCOPE.method)
+        zdjl.clearVars(session.context.SCOPE.signal)
         zdjl.deleteVar(viewId)
         zdjl.deleteVar(eventEmitId)
       })
     })
+  }
 
-    const [headerElement, mainElement, footerElement] = this.extractRootElements(rootComponent)
-
+  private processRootElements(headerElement: JSX.Element | null, mainElement: JSX.Element, footerElement: JSX.Element | null, session: RenderSession) {
     const header = headerElement
-      ? this.processHeaderElement(headerElement)
+      ? this.processHeaderElement(headerElement, session)
       : { isExpr: false, title: new Markdown().add(Markdown.space()).end() }
-    const main = [this.processElement(mainElement)].flat()
-    const footer = footerElement ? this.processFooterElement(footerElement) : {}
+    const main = [this.processElement(mainElement, session)].flat()
+    const footer = footerElement ? this.processFooterElement(footerElement, session) : {}
+    return { header, main, footer }
+  }
 
-    const eventEmitter = this.context.createEventEmitter()
-    const { expr: eventListenerFunc } = this.reactiveProcessor.hoistFunc(eventEmitter)
-
-    const vars = [
+  private createVars(viewId: string, eventEmitId: string, main: Variable[], eventListenerFunc: string) {
+    return [
       switchToVarMode(
         definedVar(eventEmitId, {
           varType: 'ui_text',
@@ -318,8 +372,10 @@ export class Renderer {
         syncValueOnChange: true,
       })
     ]
+  }
 
-    const action = switchToVarModeForAction(
+  private createAction(vars: any[], header: any, footer: any) {
+    return switchToVarModeForAction(
       {
         type: '设置变量',
         vars: vars,
@@ -336,48 +392,45 @@ export class Renderer {
         dialogCancelText: footer.cancelTextIsExpr,
       }
     )
+  }
 
-    const show = async () => {
-      if (typeof zdjl === 'undefined') {
-        throw new Error('未处于目标环境,无法使用API: zdjl.runActionAsync')
-      }
-      
-      await zdjl.runActionAsync(action)
-      const signal = zdjl.getVars(this.context.SCOPE.signal)
-      const raw = zdjl.getVar(viewId)
-      const input: Record<string, any> = {}
-      if (this.context.reserved.size) {
-        deepTraverse(raw, (key, value) => {
-          if (!key.startsWith('var$')) {
-            // is not varname
-            return
-          }
-          const reservedName = this.context.reserved.get(key)
-          if (reservedName) {
-            if (input[reservedName] == null) {
-              input[reservedName] = value
-            }
-            else {
-              input[reservedName] = [input[reservedName], value].flat()
-            }
-          }
-        })
-      }
-      this.context.cleanup()
-      return { raw, input, signal }
+  private async showDialog(action: any, session: RenderSession, viewId: string) {
+    if (typeof zdjl === 'undefined') {
+      throw new Error('未处于目标环境,无法使用API: zdjl.runActionAsync')
     }
-    return {
-      action,
-      vars: main,
-      show
+
+    await zdjl.runActionAsync(action)
+    const signal = zdjl.getVars(session.context.SCOPE.signal)
+    const raw = zdjl.getVar(viewId)
+
+    const input = this.processInput(raw, session)
+    session.context.cleanup()
+    return { raw, input, signal }
+  }
+
+  private processInput(raw: Record<string, any>, session: RenderSession) {
+    const input: Record<string, any> = {}
+    if (session.context.reservedVariableNames.size) {
+      deepTraverse(raw, (key, value) => {
+        if (!key.startsWith('var$')) return
+        const reservedName = session.context.reservedVariableNames.get(key)
+        if (reservedName) {
+          if (input[reservedName] == null) {
+            input[reservedName] = value
+          } else {
+            input[reservedName] = [input[reservedName], value].flat()
+          }
+        }
+      })
     }
+    return input
   }
 }
 
 export interface HookFunction<T = any, U = any> {
-  (value: T, context: AdapterContext): U
+  (value: T, context: PropertyAdapterContext): U
 }
-export interface AdapterContext {
+export interface PropertyAdapterContext {
   sourceObj: Record<string, any> // 原始数据对象
   targetObj: Record<string, any> // 正在构建的目标对象
   targetPath: string[]           // 当前处理的属性路径
@@ -394,7 +447,7 @@ export interface PropertyMapping<T = string, A = string> {
   /**钩子 */
   hooks?: HookFunction[]
   /**使用此映射的条件 */
-  condition?(context: AdapterContext): boolean
+  condition?(context: PropertyAdapterContext): boolean
 }
 export interface AdapterConfig {
   /**映射表:定义属性转换逻辑 */
@@ -404,9 +457,9 @@ export interface AdapterConfig {
   /**全局属性后处理器:执行属性钩子后,写入目标对象前 */
   postHook?: HookFunction
   /**本次转换的错误处理逻辑 */
-  errorHandler?: (error: Error, context: AdapterContext) => void // 错误处理器
+  errorHandler?: (error: Error, context: PropertyAdapterContext) => void // 错误处理器
 }
-export interface AdapterInterface {
+export interface PropertyAdapterInterface {
   /**
    * 执行数据适配转换
    * @param adaptee 源数据对象
@@ -416,7 +469,7 @@ export interface AdapterInterface {
   adapt(adaptee: Record<string, any>, configOverrides?: Partial<AdapterConfig>): any
 }
 // 通用适配器 - 将源数据转换为目标数据格式
-export class UniversalAdapter implements AdapterInterface {
+export class UniversalAdapter implements PropertyAdapterInterface {
   private readonly globalConfig: AdapterConfig
   constructor(baseConfig?: Partial<AdapterConfig>) {
     this.globalConfig = {
@@ -428,7 +481,7 @@ export class UniversalAdapter implements AdapterInterface {
     }
   }
   public adapt(adaptee: Record<string, any>, configOverrides?: Partial<AdapterConfig>): Record<string, any> {
-    const context: AdapterContext = { sourceObj: adaptee, targetObj: {}, config: this.mergeConfigs(this.globalConfig, configOverrides), targetPath: [], sourcePath: [] }
+    const context: PropertyAdapterContext = { sourceObj: adaptee, targetObj: {}, config: this.mergeConfigs(this.globalConfig, configOverrides), targetPath: [], sourcePath: [] }
 
     return this.safeExecute(() => {
       for (const propertyMapping of context.config.mappings) {
@@ -444,7 +497,7 @@ export class UniversalAdapter implements AdapterInterface {
     return this._singleton
   }
   private static _singleton: UniversalAdapter | undefined
-  private processMapping(context: AdapterContext, mapping: PropertyMapping): void {
+  private processMapping(context: PropertyAdapterContext, mapping: PropertyMapping): void {
     if (mapping.condition && !mapping.condition(context)) return
     context.targetPath = mapping.target.split('.')
     // 如果 adaptee path 未提供, 则认为 target 和 adaptee 的路径一致, 所以直接使用 target path
@@ -481,7 +534,7 @@ export class UniversalAdapter implements AdapterInterface {
     }
     obj[paths[paths.length - 1]] = value
   }
-  private safeExecute<T>(fn: () => T, context: AdapterContext, fallback: T): T {
+  private safeExecute<T>(fn: () => T, context: PropertyAdapterContext, fallback: T): T {
     try {
       return fn()
     } catch (error) {
@@ -489,12 +542,12 @@ export class UniversalAdapter implements AdapterInterface {
       return fallback
     }
   }
-  private applyHooks<T, U>(context: AdapterContext, source: T, hooks: HookFunction[]): U {
+  private applyHooks<T, U>(context: PropertyAdapterContext, source: T, hooks: HookFunction[]): U {
     return hooks.reduce((source, hook) => {
       return this.safeExecute(() => hook(source, context), context, source)
     }, source as any)
   }
-  private handleError(error: Error, context: AdapterContext): void {
+  private handleError(error: Error, context: PropertyAdapterContext): void {
     if (context.config.errorHandler) {
       context.config.errorHandler(error, context)
     } else {
@@ -504,20 +557,20 @@ export class UniversalAdapter implements AdapterInterface {
 }
 
 class VariableAdapter {
-  constructor(private renderer: Renderer, private varname: string) { }
-  private processSignal(value: any, adapterContext: AdapterContext) {
+  constructor(private session: RenderSession, private varname: string) { }
+  private processSignal(value: any, adapterContext: PropertyAdapterContext) {
     if (typeof value === 'function') {
       const propertyName = adapterContext.targetPath[adapterContext.targetPath.length - 1]
-      if (propertyName && !this.renderer.context.signalDerivedProperties.includes(propertyName)) {
-        this.renderer.context.signalDerivedProperties.push(propertyName)
+      if (propertyName && !this.session.context.reactiveDerivedProperties.includes(propertyName)) {
+        this.session.context.reactiveDerivedProperties.push(propertyName)
       }
-      return this.renderer.reactiveProcessor.hoistSignal(value).expr
+      return this.session.reactiveProcessor.hoistSignal(value).expr
     }
     return value
   }
   private processChangeEvent(onChange: Function) {
     if (typeof onChange === 'function') {
-      this.renderer.context.saveEvent(onChange, this.varname)
+      this.session.context.saveEventListener(onChange, this.varname)
       return true
     } else {
       return
@@ -574,7 +627,8 @@ function processColor(val: any) {
     return
   }
 }
-function createProcessTextHook(renderer: Renderer): HookFunction {
+function createProcessTextHook(session: RenderSession): HookFunction {
+  const { context, reactiveProcessor } = session
   return (val: any, adapterContext) => {
     const children = Array.isArray(val) ? val : [val]
     const isVarMode = !!children.find(it => typeof it === 'function')
@@ -585,10 +639,10 @@ function createProcessTextHook(renderer: Renderer): HookFunction {
       }
       else if (typeof child === 'function') {
         const propertyName = adapterContext.targetPath[adapterContext.targetPath.length - 1]
-        if (propertyName && !renderer.context.signalDerivedProperties.includes(propertyName)) {
-          renderer.context.signalDerivedProperties.push(propertyName)
+        if (propertyName && !context.reactiveDerivedProperties.includes(propertyName)) {
+          context.reactiveDerivedProperties.push(propertyName)
         }
-        result = `${renderer.reactiveProcessor.hoistSignal(child).expr}`
+        result = `${reactiveProcessor.hoistSignal(child).expr}`
       }
       return index === 0 ? result : `+${result}`
     })
@@ -604,19 +658,19 @@ abstract class ElementConverter {
     return elem.type === this.type
   }
 
-  public convertToVariable(elem: JSX.Element, renderer: Renderer): Variable {
-    const varname = renderer.context.generateVarname()
+  public convertToVariable(elem: JSX.Element, renderer: Renderer, session: RenderSession): Variable {
+    const varname = session.context.generateVariableName()
     if (elem.props.name) {
-      renderer.context.reserved.set(varname, elem.props.name)
+      session.context.reservedVariableNames.set(varname, elem.props.name)
     }
-    const adapter = new VariableAdapter(renderer, varname)
-    const props = adapter.adapt(elem, this.getMappings(elem, renderer))
+    const adapter = new VariableAdapter(session, varname)
+    const props = adapter.adapt(elem, this.getMappings(elem, renderer, session))
     return switchToVarMode(
       definedVar(varname, {
-        varType: this.getVarType(elem, renderer),
+        varType: this.getVarType(elem, renderer, session),
         ...props,
       }),
-      renderer.context.signalDerivedProperties.splice(0)
+      session.context.reactiveDerivedProperties.splice(0)
     )
   }
 
@@ -624,56 +678,56 @@ abstract class ElementConverter {
     return mappings
   }
   protected abstract type: string
-  protected abstract getVarType(elem: JSX.Element, renderer: Renderer): AllVariableTypes
-  protected abstract getMappings(elem: JSX.Element, renderer: Renderer): PropertyMapping[]
+  protected abstract getVarType(elem: JSX.Element, renderer: Renderer, session: RenderSession): AllVariableTypes
+  protected abstract getMappings(elem: JSX.Element, renderer: Renderer, session: RenderSession): PropertyMapping[]
 }
 
-interface ElementConfig {
+interface UIElementConfig {
   type: string
-  varType: AllVariableTypes | ((elem: JSX.Element, renderer: Renderer) => AllVariableTypes)
-  mappings: PropertyMapping[] | ((elem: JSX.Element, renderer: Renderer) => PropertyMapping[])
+  varType: AllVariableTypes | ((elem: JSX.Element, renderer: Renderer, session: RenderSession) => AllVariableTypes)
+  mappings: PropertyMapping[] | ((elem: JSX.Element, renderer: Renderer, session: RenderSession) => PropertyMapping[])
 }
 
 class ConfigurableElementConverter extends ElementConverter {
   protected type: string
-  private config: ElementConfig
+  private config: UIElementConfig
 
-  constructor(config: ElementConfig) {
+  constructor(config: UIElementConfig) {
     super()
     this.config = config
     this.type = config.type
   }
 
-  protected getVarType(elem: JSX.Element, renderer: Renderer): AllVariableTypes {
+  protected getVarType(elem: JSX.Element, renderer: Renderer, session: RenderSession): AllVariableTypes {
     return typeof this.config.varType === 'function'
-      ? this.config.varType(elem, renderer)
+      ? this.config.varType(elem, renderer, session)
       : this.config.varType
   }
 
-  protected getMappings(elem: JSX.Element, renderer: Renderer): PropertyMapping[] {
+  protected getMappings(elem: JSX.Element, renderer: Renderer, session: RenderSession): PropertyMapping[] {
     const mappings = typeof this.config.mappings === 'function'
-      ? this.config.mappings(elem, renderer)
+      ? this.config.mappings(elem, renderer, session)
       : this.config.mappings
     return this.defineMappings(mappings as any)
   }
 }
 
-const ELEMENT_CONFIGS: ElementConfig[] = [
+const UI_ELEMENT_CONFIGS: UIElementConfig[] = [
   // Text 元素配置
   {
     type: 'text',
     varType: 'ui_text',
-    mappings: (elem: JSX.Element, renderer: Renderer) => [
+    mappings: (elem: JSX.Element, renderer: Renderer, session) => [
       {
         target: 'textContent', source: 'children', hooks: [
           createConditionalHook(
             val => val?.type === 'expr',
             elem => {
               const expr = elem.props.value && typeof elem.props.value === 'string' ? elem.props.value : ''
-              renderer.context.signalDerivedProperties.push('textContent')
+              session.context.reactiveDerivedProperties.push('textContent')
               return expr
             },
-            createProcessTextHook(renderer),
+            createProcessTextHook(session),
           ),
         ]
       },
@@ -690,20 +744,20 @@ const ELEMENT_CONFIGS: ElementConfig[] = [
   {
     type: 'button',
     varType: 'ui_button',
-    mappings: (elem: JSX.Element, renderer: Renderer) => [
+    mappings: (elem: JSX.Element, renderer: Renderer, session) => [
       {
         target: 'buttonText', source: 'children', hooks: [
           createConditionalHook(
             val => val == null,
             val => 'Button',
-            createProcessTextHook(renderer)
+            createProcessTextHook(session)
           )
         ]
       },
       { target: 'closeDialogOnAction', defaultValue: false },
       {
         target: 'action', source: 'onClick', hooks: [val => {
-          const result = createJsAction(typeof val === 'function' ? `${renderer.reactiveProcessor.hoistFunc(val).expr}(${renderer.context.exprForGetDialogContext})` : '')
+          const result = createJsAction(typeof val === 'function' ? `${session.reactiveProcessor.hoistFunc(val).expr}(${session.context.dialogContextExpression})` : '')
           return result
         }]
       },
@@ -745,20 +799,20 @@ const ELEMENT_CONFIGS: ElementConfig[] = [
   {
     type: 'container',
     varType: 'object',
-    mappings: (elem: JSX.Element, renderer: Renderer) => [
+    mappings: (elem: JSX.Element, renderer: Renderer, session) => [
       { target: 'syncValueOnChange', defaultValue: false },
       {
         target: 'objectVars', source: 'children', hooks: [
           () => {
-            renderer.context.currentPath += `.${renderer.context.generateVarname()}`
+            session.context.currentVariablePath += `.${session.context.generateVariableName()}`
             const vars: Variable[] = []
             for (const child of [elem.props.children].flat()) {
               if (child) {
-                const res = renderer.processElement(child) as Variable
+                const res = renderer.processElement(child, session) as Variable
                 vars.push(res)
               }
             }
-            renderer.context.currentPath = renderer.context.currentPath.split('.').slice(0, -1).join('.')
+            session.context.currentVariablePath = session.context.currentVariablePath.split('.').slice(0, -1).join('.')
             return vars
           },
           val => val
@@ -812,17 +866,23 @@ const ELEMENT_CONFIGS: ElementConfig[] = [
   }
 ]
 
-function createConfigurableConverters(configs: ElementConfig[]): ConfigurableElementConverter[] {
+function createConfigurableConverters(configs: UIElementConfig[]): ConfigurableElementConverter[] {
   return configs.map(config => new ConfigurableElementConverter(config))
 }
 
 export const registerBuiltinProcessors = (renderer: Renderer) => {
-  renderer.registerProcessor(...createConfigurableConverters(ELEMENT_CONFIGS))
+  renderer.registerConverter(...createConfigurableConverters(UI_ELEMENT_CONFIGS))
 }
 
+/**
+ * 渲染根组件
+ * @param rootComponent 
+ * @param options 
+ * @returns 
+ */
 export const render = (rootComponent: JSX.Element, options?: { storageId?: string; hooks?: RendererHooks }) => {
-  // 如果需要实现使用同一个渲染器实例来渲染不同组件，那么每次渲染（调用show）都需要新的 RendererContext 实例，否则上一个组件执行清理计划后， 下一个组件找不到共享的变量
+  // 重复创建的成本实际微乎其微, 可忽略
   const renderer = new Renderer()
-  renderer.registerProcessor(...createConfigurableConverters(ELEMENT_CONFIGS))
+  renderer.registerConverter(...createConfigurableConverters(UI_ELEMENT_CONFIGS))
   return renderer.render(rootComponent, options)
 }
