@@ -76,3 +76,4 @@ const Fragment = (props: any) => props.children
 
 export { jsx, jsx as jsxs, Fragment }
 export * from './core/reactive'
+export * from './core/renderer'

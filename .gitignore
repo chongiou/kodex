@@ -1,5 +1,6 @@
 dist
 lib
 node_modules
+src/test
 *.test.*
 package-lock.json

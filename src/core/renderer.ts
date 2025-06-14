@@ -13,14 +13,28 @@ class RenderContext {
   private eventListenerPool = new Map<string, Function>()
   private renderHooks = new Map<string, Function>()
   private variableCounter = 0
+  private variablePathStack: string[] = ['view']
 
   public cleanupFunctions = new Set<Function>()
   public reservedVariableNames = new Map<string, string>()
-  public currentVariablePath = 'view'
   public isUserCancel = true
   public dialogContextExpression: string = ''
   public reactiveDerivedProperties: string[] = []
   public SCOPE = { method: `kodex.method.${generateUniqueId()}`, signal: `kodex.signal.${generateUniqueId()}` } as const
+
+  get currentVariablePath(): string {
+    return this.variablePathStack.join('.')
+  }
+
+  pushVariablePath(varname: string): void {
+    this.variablePathStack.push(varname)
+  }
+
+  popVariablePath(): void {
+    if (this.variablePathStack.length > 1) {
+      this.variablePathStack.pop()
+    }
+  }
 
   generateVariableName(): string {
     return `var$${++this.variableCounter}`
@@ -149,11 +163,15 @@ export interface DialogContext {
 interface RenderSession {
   context: RenderContext
   reactiveProcessor: ReactiveProcessor
+  processElement(elem: JSX.Element | string, session: RenderSession): Variable[] | Variable
+  elementStack: JSX.Element[]
+  getParentElement(): JSX.Element | undefined
+  getChildElements(): JSX.Element[]
 }
 
 // 渲染器 - 协调渲染流程
 export class Renderer {
-  private converters: ElementConverter[] = []
+  private converter: Map<string, ElementConverter> = new Map()
 
   constructor(private debug = false) {
   }
@@ -161,6 +179,7 @@ export class Renderer {
   private createRenderSession(): RenderSession {
     const context = new RenderContext()
     const reactiveProcessor = new ReactiveProcessor(context, this.debug)
+    const elementStack: JSX.Element[] = []
 
     // 设置对话框上下文表达式
     context.dialogContextExpression = reactiveProcessor.hoist(
@@ -169,7 +188,21 @@ export class Renderer {
       context.SCOPE.signal,
     ).expr
 
-    return { context, reactiveProcessor }
+    const session = {
+      context,
+      reactiveProcessor,
+      processElement: this.processElement.bind(this),
+      elementStack,
+      getParentElement: () => elementStack[elementStack.length - 2],
+      getChildElements: () => {
+        const currentElement = elementStack[elementStack.length - 1]
+        if (!currentElement || !currentElement.props.children) return []
+        return Array.isArray(currentElement.props.children)
+          ? currentElement.props.children
+          : [currentElement.props.children]
+      }
+    }
+    return session
   }
 
   private handleComponent(elem: JSX.Element, session: RenderSession): Variable[] | Variable {
@@ -258,8 +291,10 @@ export class Renderer {
     return [header, main, footer] as const
   }
 
-  registerConverter(...converter: ElementConverter[]) {
-    this.converters.push(...converter)
+  registerConverter(...converters: ElementConverter[]) {
+    for (const converter of converters) {
+      this.converter.set(converter.type, converter)
+    }
   }
 
   /**
@@ -277,14 +312,21 @@ export class Renderer {
       console.error({ elem })
       throw new Error(`值不合法`)
     }
-    if (typeof elem.type === 'function') {
-      return this.handleComponent(elem, session)
+
+    session.elementStack.push(elem)
+
+    try {
+      if (typeof elem.type === 'function') {
+        return this.handleComponent(elem, session)
+      }
+      const processor = this.converter.get(elem.type as string)
+      if (!processor) {
+        throw new Error(`该类型未实现: ${elem.type}`)
+      }
+      return processor.convertToVariable(elem, session)
+    } finally {
+      session.elementStack.pop()
     }
-    const processor = this.converters.find(p => p.match(elem))
-    if (!processor) {
-      throw new Error(`该类型未实现: ${elem.type}`)
-    }
-    return processor.convertToVariable(elem, this, session)
   }
 
   /**
@@ -298,7 +340,7 @@ export class Renderer {
   render(rootComponent: JSX.Element, options: { storageId?: string, hooks?: RendererHooks } = {}) {
     const session = this.createRenderSession()
     const { storageId, hooks } = this.prepareRenderOptions(rootComponent, options)
-    
+
     session.context.saveHooks(hooks)
     const { viewId, eventEmitId } = this.setupSessionIds(storageId)
     this.setupCleanupPlan(session, viewId, eventEmitId)
@@ -652,44 +694,51 @@ function createProcessTextHook(session: RenderSession): HookFunction {
 
 // 元素处理器基类 - 其子类处理不同类型的JSX元素
 abstract class ElementConverter {
-  protected varname: string = ''
+  public abstract type: string
+  public varname: string = ''
 
   public match(elem: JSX.Element): boolean {
     return elem.type === this.type
   }
 
-  public convertToVariable(elem: JSX.Element, renderer: Renderer, session: RenderSession): Variable {
+  public convertToVariable(elem: JSX.Element, session: RenderSession): Variable {
     const varname = session.context.generateVariableName()
     if (elem.props.name) {
       session.context.reservedVariableNames.set(varname, elem.props.name)
     }
-    const adapter = new VariableAdapter(session, varname)
-    const props = adapter.adapt(elem, this.getMappings(elem, renderer, session))
-    return switchToVarMode(
-      definedVar(varname, {
-        varType: this.getVarType(elem, renderer, session),
-        ...props,
-      }),
-      session.context.reactiveDerivedProperties.splice(0)
-    )
+
+    session.context.pushVariablePath(varname)
+
+    try {
+      const adapter = new VariableAdapter(session, varname)
+      const props = adapter.adapt(elem, this.getMappings(elem, session))
+      return switchToVarMode(
+        definedVar(varname, {
+          varType: this.getVarType(elem, session),
+          ...props,
+        }),
+        session.context.reactiveDerivedProperties.splice(0)
+      )
+    } finally {
+      session.context.popVariablePath()
+    }
   }
 
   protected defineMappings(mappings: PropertyMapping<AllVariablePropsKeys>[]) {
     return mappings
   }
-  protected abstract type: string
-  protected abstract getVarType(elem: JSX.Element, renderer: Renderer, session: RenderSession): AllVariableTypes
-  protected abstract getMappings(elem: JSX.Element, renderer: Renderer, session: RenderSession): PropertyMapping[]
+  protected abstract getVarType(elem: JSX.Element, session: RenderSession): AllVariableTypes
+  protected abstract getMappings(elem: JSX.Element, session: RenderSession): PropertyMapping[]
 }
 
 interface UIElementConfig {
   type: string
-  varType: AllVariableTypes | ((elem: JSX.Element, renderer: Renderer, session: RenderSession) => AllVariableTypes)
-  mappings: PropertyMapping[] | ((elem: JSX.Element, renderer: Renderer, session: RenderSession) => PropertyMapping[])
+  varType: AllVariableTypes | ((elem: JSX.Element, session: RenderSession, context: { parent?: JSX.Element, children: JSX.Element[] }) => AllVariableTypes)
+  mappings: PropertyMapping[] | ((elem: JSX.Element, session: RenderSession, context: { parent?: JSX.Element, children: JSX.Element[] }) => PropertyMapping[])
 }
 
 class ConfigurableElementConverter extends ElementConverter {
-  protected type: string
+  public type: string
   private config: UIElementConfig
 
   constructor(config: UIElementConfig) {
@@ -698,15 +747,21 @@ class ConfigurableElementConverter extends ElementConverter {
     this.type = config.type
   }
 
-  protected getVarType(elem: JSX.Element, renderer: Renderer, session: RenderSession): AllVariableTypes {
+  protected getVarType(elem: JSX.Element, session: RenderSession): AllVariableTypes {
     return typeof this.config.varType === 'function'
-      ? this.config.varType(elem, renderer, session)
+      ? this.config.varType(elem, session, {
+        parent: session.getParentElement(),
+        children: session.getChildElements()
+      })
       : this.config.varType
   }
 
-  protected getMappings(elem: JSX.Element, renderer: Renderer, session: RenderSession): PropertyMapping[] {
+  protected getMappings(elem: JSX.Element, session: RenderSession): PropertyMapping[] {
     const mappings = typeof this.config.mappings === 'function'
-      ? this.config.mappings(elem, renderer, session)
+      ? this.config.mappings(elem, session, {
+        parent: session.getParentElement(),
+        children: session.getChildElements()
+      })
       : this.config.mappings
     return this.defineMappings(mappings as any)
   }
@@ -717,7 +772,7 @@ const UI_ELEMENT_CONFIGS: UIElementConfig[] = [
   {
     type: 'text',
     varType: 'ui_text',
-    mappings: (elem: JSX.Element, renderer: Renderer, session) => [
+    mappings: (elem, session) => [
       {
         target: 'textContent', source: 'children', hooks: [
           createConditionalHook(
@@ -744,7 +799,7 @@ const UI_ELEMENT_CONFIGS: UIElementConfig[] = [
   {
     type: 'button',
     varType: 'ui_button',
-    mappings: (elem: JSX.Element, renderer: Renderer, session) => [
+    mappings: (elem, session) => [
       {
         target: 'buttonText', source: 'children', hooks: [
           createConditionalHook(
@@ -774,7 +829,7 @@ const UI_ELEMENT_CONFIGS: UIElementConfig[] = [
       }
       return 'string'
     },
-    mappings: (elem: JSX.Element, renderer: Renderer) => [
+    mappings: (elem) => [
       {
         condition: () => elem.props.type === 'text',
         target: 'value', source: 'value'
@@ -790,7 +845,7 @@ const UI_ELEMENT_CONFIGS: UIElementConfig[] = [
   {
     type: 'checkbox',
     varType: 'bool',
-    mappings: (elem: JSX.Element, renderer: Renderer) => [
+    mappings: () => [
       { target: 'value', source: 'checked' }
     ]
   },
@@ -799,24 +854,19 @@ const UI_ELEMENT_CONFIGS: UIElementConfig[] = [
   {
     type: 'container',
     varType: 'object',
-    mappings: (elem: JSX.Element, renderer: Renderer, session) => [
+    mappings: (elem, session, { children }) => [
       { target: 'syncValueOnChange', defaultValue: false },
       {
-        target: 'objectVars', source: 'children', hooks: [
-          () => {
-            session.context.currentVariablePath += `.${session.context.generateVariableName()}`
-            const vars: Variable[] = []
-            for (const child of [elem.props.children].flat()) {
-              if (child) {
-                const res = renderer.processElement(child, session) as Variable
-                vars.push(res)
-              }
+        target: 'objectVars', source: 'children', hooks: [() => {
+          const vars: Variable[] = []
+          for (const child of children) {
+            if (child) {
+              const res = session.processElement(child, session) as Variable
+              vars.push(res)
             }
-            session.context.currentVariablePath = session.context.currentVariablePath.split('.').slice(0, -1).join('.')
-            return vars
-          },
-          val => val
-        ]
+          }
+          return vars
+        }]
       }
     ]
   },
@@ -825,7 +875,7 @@ const UI_ELEMENT_CONFIGS: UIElementConfig[] = [
   {
     type: 'expr',
     varType: 'expression',
-    mappings: (elem: JSX.Element, renderer: Renderer) => [
+    mappings: () => [
       { target: 'valueExp', source: 'value', hooks: [val => typeof val === 'string' ? val : ''] }
     ]
   },
@@ -834,7 +884,7 @@ const UI_ELEMENT_CONFIGS: UIElementConfig[] = [
   {
     type: 'file',
     varType: 'file',
-    mappings: (elem: JSX.Element, renderer: Renderer) => [
+    mappings: () => [
       { target: 'filePath', source: 'value', hooks: [val => typeof val === 'string' ? val : ''] }
     ]
   },
@@ -843,7 +893,7 @@ const UI_ELEMENT_CONFIGS: UIElementConfig[] = [
   {
     type: 'select',
     varType: 'string',
-    mappings: (elem: JSX.Element, renderer: Renderer) => [
+    mappings: () => [
       {
         target: 'stringItems', source: 'options', hooks: [val => {
           if (typeof val === 'function') return val
@@ -860,7 +910,7 @@ const UI_ELEMENT_CONFIGS: UIElementConfig[] = [
   {
     type: 'position',
     varType: 'position',
-    mappings: (elem: JSX.Element, renderer: Renderer) => [
+    mappings: () => [
       { target: 'onlyCanChooseLocWhenInput', defaultValue: true }
     ]
   }
@@ -870,7 +920,7 @@ function createConfigurableConverters(configs: UIElementConfig[]): ConfigurableE
   return configs.map(config => new ConfigurableElementConverter(config))
 }
 
-export const registerBuiltinProcessors = (renderer: Renderer) => {
+export const registerBuiltinConverters = (renderer: Renderer) => {
   renderer.registerConverter(...createConfigurableConverters(UI_ELEMENT_CONFIGS))
 }
 
