@@ -14,13 +14,15 @@ class RenderContext {
   private renderHooks = new Map<string, Function>()
   private variableCounter = 0
   private variablePathStack: string[] = ['view']
+  private cleanupFunctions = new Set<Function>()
+  private reservedVariableNames = new Map<string, string>()
 
-  public cleanupFunctions = new Set<Function>()
-  public reservedVariableNames = new Map<string, string>()
+  public reactiveDerivedProperties: string[] = []
   public isUserCancel = true
   public dialogContextExpression: string = ''
-  public reactiveDerivedProperties: string[] = []
   public SCOPE = { method: `kodex.method.${generateUniqueId()}`, signal: `kodex.signal.${generateUniqueId()}` } as const
+
+  constructor(private debug = false) { }
 
   get currentVariablePath(): string {
     return this.variablePathStack.join('.')
@@ -74,22 +76,25 @@ class RenderContext {
   }
 
   createValueChangeEmitter() {
-    // (重要)必须给予变量默认值, 否则无法检测值前后变化!
-    const debug = true
+    // NOTE：必须给予变量默认值, 否则无法检测值前后变化
+    const debug = this.debug
     let initialized = false
     let oldValue = {} as Record<string, any>
+
     const eventEmitter = (newValue: Record<string, any>) => {
       if (!newValue) return
+
       if (!initialized) {
         initialized = true
-        // 不使用可选链是为了兼容 zdjl 环境
         const dialogCreatedHook = this.renderHooks.get('dialogCreated')
         dialogCreatedHook && dialogCreatedHook()
         oldValue = JSON.parse(JSON.stringify(newValue))
         return
       }
+
       const diff = compareDictWithPath(oldValue, newValue)
       debug && console.warn('值变化:', diff)
+
       if (diff.length) {
         oldValue = JSON.parse(JSON.stringify(newValue))
         diff.forEach(change => {
@@ -99,26 +104,50 @@ class RenderContext {
         })
       }
     }
+
     return eventEmitter
+  }
+
+  addCleanupFunction(fn: Function): void {
+    this.cleanupFunctions.add(fn)
+  }
+
+  addReactiveProperty(propertyName: string): void {
+    if (!this.reactiveDerivedProperties.includes(propertyName)) {
+      this.reactiveDerivedProperties.push(propertyName)
+    }
+  }
+
+  getReactiveProperties(): string[] {
+    return this.reactiveDerivedProperties.splice(0)
+  }
+
+  reserveVariableName(varname: string, name: string): void {
+    this.reservedVariableNames.set(varname, name)
+  }
+
+  getReservedVariableNames(): Map<string, string> {
+    return this.reservedVariableNames
   }
 }
 
-// 响应处理器 - 处理响应式相关
+// 响应式处理器 - 处理响应式相关
 class ReactiveProcessor {
-  constructor(private renderContext: RenderContext, private debug = false) { }
+  constructor(private readonly context: RenderContext, private readonly debug = false) { }
+
   hoistSignal(signalGetter: SignalGetter): { id: string, expr: string } {
     const name = generateUniqueId()
     const cleanup = createEffect(() => {
       const val = signalGetter()
-      this.hoist(name, val, this.renderContext!.SCOPE.signal)
+      this.hoist(name, val, this.context.SCOPE.signal)
     })
-    this.renderContext.cleanupFunctions.add(cleanup)
-    return { id: name, expr: `zdjl.getVar('${name}','${this.renderContext.SCOPE.signal}')` }
+    this.context.addCleanupFunction(cleanup)
+    return { id: name, expr: `zdjl.getVar('${name}','${this.context.SCOPE.signal}')` }
   }
 
   hoistFunc(fn: Function): { id: string, expr: string } {
     const name = generateUniqueId()
-    return this.hoist(name, fn, this.renderContext.SCOPE.method)
+    return this.hoist(name, fn, this.context.SCOPE.method)
   }
 
   processText(val: any): [boolean, string] {
@@ -173,11 +202,10 @@ interface RenderSession {
 export class Renderer {
   private converter: Map<string, ElementConverter> = new Map()
 
-  constructor(private debug = false) {
-  }
+  constructor(private debug = false) { }
 
   private createRenderSession(): RenderSession {
-    const context = new RenderContext()
+    const context = new RenderContext(this.debug)
     const reactiveProcessor = new ReactiveProcessor(context, this.debug)
     const elementStack: JSX.Element[] = []
 
@@ -375,7 +403,7 @@ export class Renderer {
   }
 
   private setupCleanupPlan(session: RenderSession, viewId: string, eventEmitId: string) {
-    session.context.cleanupFunctions.add(() => {
+    session.context.addCleanupFunction(() => {
       sleep(50).then(() => {
         if (typeof zdjl === 'undefined') return
         zdjl.clearVars(session.context.SCOPE.method)
@@ -452,10 +480,11 @@ export class Renderer {
 
   private processInput(raw: Record<string, any>, session: RenderSession) {
     const input: Record<string, any> = {}
-    if (session.context.reservedVariableNames.size) {
+    const reservedNames = session.context.getReservedVariableNames()
+    if (reservedNames.size) {
       deepTraverse(raw, (key, value) => {
         if (!key.startsWith('var$')) return
-        const reservedName = session.context.reservedVariableNames.get(key)
+        const reservedName = reservedNames.get(key)
         if (reservedName) {
           if (input[reservedName] == null) {
             input[reservedName] = value
@@ -600,31 +629,33 @@ export class UniversalAdapter implements PropertyAdapterInterface {
 
 class VariableAdapter {
   constructor(private session: RenderSession, private varname: string) { }
+
   private processSignal(value: any, adapterContext: PropertyAdapterContext) {
     if (typeof value === 'function') {
       const propertyName = adapterContext.targetPath[adapterContext.targetPath.length - 1]
-      if (propertyName && !this.session.context.reactiveDerivedProperties.includes(propertyName)) {
-        this.session.context.reactiveDerivedProperties.push(propertyName)
+      if (propertyName) {
+        this.session.context.addReactiveProperty(propertyName)
       }
       return this.session.reactiveProcessor.hoistSignal(value).expr
     }
     return value
   }
+
   private processChangeEvent(onChange: Function) {
     if (typeof onChange === 'function') {
       this.session.context.saveEventListener(onChange, this.varname)
       return true
-    } else {
-      return
     }
+    return undefined
   }
+
   public adapt(elem: JSX.Element, mappings: PropertyMapping[]) {
     return UniversalAdapter.getSingleton({
       mappings: [
         // 表单与交互
         { target: 'showInput', defaultValue: true },
         { target: 'mustInput', source: 'required', defaultValue: false },
-        { target: 'syncValueOnChange', source: 'onChange', hooks: [this.processChangeEvent] },
+        { target: 'syncValueOnChange', source: 'onChange', hooks: [this.processChangeEvent.bind(this)] },
         { target: 'rememberInputValue', source: 'memo' },
         // 文本与内容
         { target: 'varDesc', source: 'description', },
@@ -645,7 +676,6 @@ class VariableAdapter {
       ],
       postHook: createConditionalHook(
         (val, ctx) => {
-          // 排除事件监听器,这些内容单纯是函数,而非信号
           return !['onChange', 'onClick'].includes(ctx.sourcePath[0])
         },
         this.processSignal.bind(this)
@@ -681,8 +711,8 @@ function createProcessTextHook(session: RenderSession): HookFunction {
       }
       else if (typeof child === 'function') {
         const propertyName = adapterContext.targetPath[adapterContext.targetPath.length - 1]
-        if (propertyName && !context.reactiveDerivedProperties.includes(propertyName)) {
-          context.reactiveDerivedProperties.push(propertyName)
+        if (propertyName) {
+          context.addReactiveProperty(propertyName)
         }
         result = `${reactiveProcessor.hoistSignal(child).expr}`
       }
@@ -704,7 +734,7 @@ abstract class ElementConverter {
   public convertToVariable(elem: JSX.Element, session: RenderSession): Variable {
     const varname = session.context.generateVariableName()
     if (elem.props.name) {
-      session.context.reservedVariableNames.set(varname, elem.props.name)
+      session.context.reserveVariableName(varname, elem.props.name)
     }
 
     session.context.pushVariablePath(varname)
@@ -717,7 +747,7 @@ abstract class ElementConverter {
           varType: this.getVarType(elem, session),
           ...props,
         }),
-        session.context.reactiveDerivedProperties.splice(0)
+        session.context.getReactiveProperties()
       )
     } finally {
       session.context.popVariablePath()
