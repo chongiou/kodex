@@ -1,6 +1,6 @@
-import type { SignalGetter } from "./core/reactive"
-import type { DialogContext } from "./core/renderer"
-import type { CommonProps } from "./core/target-env"
+import type { SignalGetter } from '@/core'
+import type { DialogContext } from '@/core'
+import type { CommonProps } from '@/core/target-env'
 
 type Text = string | SignalGetter | Function
 
@@ -27,7 +27,7 @@ declare global {
         children?: never
       },
       input: {
-        type: 'text' | 'number'
+        type: 'text' | 'number' | 'file'
         value?: Text | number
       }
       text: {
@@ -71,9 +71,7 @@ function jsx<T extends keyof JSX.IntrinsicElements | Function>(
   return { type, props } as JSX.Element<T extends keyof JSX.IntrinsicElements ? T : any>
 }
 
-
 const Fragment = (props: any) => props.children
 
 export { jsx, jsx as jsxs, Fragment }
-export * from './core/reactive'
-export * from './core/renderer'
+export * from '@/core'

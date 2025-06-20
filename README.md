@@ -13,104 +13,121 @@ Kodex 是一个为自动精灵平台设计的声明式 UI 工具，其使用 JSX
 # NOTE
 - 当 color 不是全格式时闪退
 - 当 backgroundColor 为 null 时闪退
-- 当 var name 不合法时闪退
+- 当 var name 不合法时闪退  
 
-# 架构
+# 图表
+
+## 核心架构图
+```mermaid
+graph TB
+    subgraph "响应式核心 (reactive.ts)"
+        Signal[Signal系统]
+        Effect[Effect副作用]
+        Owner[Owner所有者]
+        Resource[Resource资源]
+        
+        Signal --> Effect
+        Effect --> Owner
+        Owner --> Signal
+    end
+    
+    subgraph "适配器层 (adapter.ts)"
+        UniversalAdapter[UniversalAdapter]
+        Mapping[属性映射配置]
+        Context[AdapterContext]
+        
+        Mapping --> UniversalAdapter
+        Context --> UniversalAdapter
+    end
+    
+    subgraph "渲染引擎 (renderer.ts)"
+        Renderer[Renderer渲染器]
+        RenderContext[RenderContext渲染上下文]
+        ElementConfigs[元素配置表]
+        DialogContext[DialogContext对话框上下文]
+        
+        ElementConfigs --> Renderer
+        RenderContext --> Renderer
+        DialogContext --> RenderContext
+    end
+    
+    subgraph "外部环境"
+        ZDJL[zdjl API]
+        JSXElements[JSX元素]
+    end
+    
+    JSXElements --> Renderer
+    Renderer --> UniversalAdapter
+    UniversalAdapter --> Signal
+    Renderer --> ZDJL
+    RenderContext --> Owner
+```
+
+## 渲染流程图
+```mermaid
+flowchart TD
+    Start[开始渲染] --> ExtractRoot[提取根元素]
+    ExtractRoot --> ProcessHeader[处理Header]
+    ExtractRoot --> ProcessMain[处理Main]
+    ExtractRoot --> ProcessFooter[处理Footer]
+    
+    ProcessMain --> CheckType{检查元素类型}
+    CheckType -->|Component| HandleComponent[处理组件]
+    CheckType -->|Native Element| ConvertElement[转换为变量]
+    
+    HandleComponent --> ExecuteComponent[执行组件函数]
+    ExecuteComponent --> ProcessChildren[处理子元素]
+    ProcessChildren --> CheckType
+    
+    ConvertElement --> GetConfig[获取元素配置]
+    GetConfig --> CreateAdapter[创建适配器]
+    CreateAdapter --> ApplyMapping[应用属性映射]
+    ApplyMapping --> ProcessReactive[处理响应式属性]
+    
+    ProcessReactive --> GenerateVar[生成变量定义]
+    GenerateVar --> RegisterSignal[注册信号]
+    
+    ProcessHeader --> CreateAction[创建动作]
+    ProcessFooter --> CreateAction
+    GenerateVar --> CreateAction
+    
+    CreateAction --> HoistValues[提升值到全局]
+    HoistValues --> CreateEventEmitter[创建事件发射器]
+    CreateEventEmitter --> ReturnResult[返回渲染结果]
+    
+    ReturnResult --> End[渲染完成]
+  ```
 
 ## 关键数据流
 ```mermaid
-graph LR
-    A[JSX元素] --> B[ElementConverter]
-    B --> C[Variable]
-    C --> D[Action]
+sequenceDiagram
+    participant JSX as JSX组件
+    participant Renderer as 渲染器
+    participant Adapter as 适配器
+    participant Reactive as 响应式系统
+    participant ZDJL as 目标环境
     
-    F[响应式数据] --> G[ReactiveProcessor]
-    G --> H[派生属性]
-    H --> C
+    JSX->>Renderer: 传入JSX元素
+    Renderer->>Renderer: 提取根元素结构
     
-    I[事件处理] --> J[事件监听器]
-    J --> K[回调函数]
-    K --> D
-```
-
-## 类关系
-```mermaid
-graph TD
-    A[Renderer] --> B[RenderContext]
-    A --> C[ElementConverter]
-    A --> D[ReactiveProcessor]
-    
-    B --> E[变量管理]
-    B --> F[事件管理]
-    B --> G[路径管理]
-    
-    C --> H[属性映射]
-    C --> I[类型转换]
-    
-    D --> J[信号处理]
-    D --> K[表达式计算]
-```
-
-## 渲染流程
-```mermaid
-graph TD
-    subgraph 初始化阶段
-        A[创建Renderer实例] --> B[注册ElementConverter]
-        B --> C[创建RenderSession]
-        C --> D[初始化RenderContext]
-        C --> E[初始化ReactiveProcessor]
-        C --> F[初始化ElementStack]
-    end
-
-    subgraph 渲染阶段
-        G[render方法] --> H[处理根组件]
-        H --> I[提取Header/Main/Footer]
+    loop 处理每个元素
+        Renderer->>Adapter: 创建适配器并应用映射
+        Adapter->>Adapter: 属性转换和过滤
+        Adapter-->>Renderer: 返回转换后的属性
         
-        subgraph Header处理
-            I --> J[processHeaderElement]
-            J --> K[处理标题文本]
-            K --> L[处理响应式表达式]
+        alt 如果有响应式属性
+            Renderer->>Reactive: 创建Signal
+            Reactive->>ZDJL: 注册信号变化监听
         end
-
-        subgraph Main处理
-            I --> M[processElement]
-            M --> N{元素类型判断}
-            N -->|组件| O[handleComponent]
-            N -->|普通元素| P[查找ElementConverter]
-            P --> Q[convertToVariable]
-            Q --> R[VariableAdapter适配]
-            R --> S[生成变量定义]
-        end
-
-        subgraph Footer处理
-            I --> T[processFooterElement]
-            T --> U[处理按钮]
-            U --> V[处理事件回调]
-        end
+        
+        Renderer->>Renderer: 生成变量定义
     end
-
-    subgraph 变量处理
-        W[VariableAdapter] --> X[属性映射]
-        X --> Y[处理响应式属性]
-        Y --> Z[生成变量表达式]
-    end
-
-    subgraph 响应式处理
-        AA[ReactiveProcessor] --> AB[处理信号]
-        AB --> AC[处理表达式]
-        AC --> AD[处理派生属性]
-    end
-
-    subgraph 结果生成
-        AE[生成Action] --> AF[组装变量]
-        AF --> AG[创建对话框]
-        AG --> AH[返回渲染结果]
-    end
-
-    %% 连接主要流程
-    S --> AE
-    L --> AE
-    V --> AE
-    AD --> S
-    Z --> S
+    
+    Renderer->>ZDJL: 提升函数和值
+    Renderer->>ZDJL: 创建事件发射器
+    Renderer->>ZDJL: 执行动作
+    
+    ZDJL-->>Renderer: 返回用户输入
+    Renderer->>Renderer: 处理输入数据
+    Renderer-->>JSX: 返回结果
 ```

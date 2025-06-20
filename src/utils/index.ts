@@ -1,4 +1,4 @@
-export const dir = (val: any, depth?: number) => console.dir(val, { depth: depth ?? null })
+export const dir = (val: any, depth?: number) => console.dir(val, { depth })
 
 export function generateUniqueId() {
   const timestamp = Date.now().toString(36)

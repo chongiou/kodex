@@ -1,8 +1,11 @@
-import { sleep } from "@/utils"
-import { SignalGetter, SignalSetter } from "./reactive"
-
+import { sleep } from '@/utils'
+import { SignalGetter, SignalSetter } from '@/core/reactive'
 
 const one_pixel = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAAXNSR0IArs4c6QAAAAtJREFUGFdjYAACAAAFAAGq1chRAAAAAElFTkSuQmCC"
+export const space = (width: number = 1, height: number = 1) => {
+  return `#MD<img width="${width}" height="${height}" src="data:image/png;base64,${one_pixel}"/>`
+}
+
 export class Markdown {
   part: string[]
   constructor() {

@@ -1,35 +1,52 @@
 export interface SignalGetter<T = any> {
-  (): T,
-  dispose: Dispose
+  (): T
 }
 export interface SignalSetter<T = any> {
-  (newValue: T): void,
-  dispose: Dispose
+  (newValue: T): void
 }
 interface Dispose {
   (): void
 }
 interface Effect {
   (): Promise<void> | void
-  deps: Set<Set<Effect>>; isActive: boolean
+  isActive: boolean
+  dependencies: Set<SignalGetter>
+  id: number
 }
-
+export interface Owner {
+  signals: Map<SignalGetter, Set<Effect>>  // 信号 -> 订阅的副作用集合
+  effects: Set<Effect>                     // 所有副作用
+  dispose(): void
+}
 interface ReactiveContext {
   currentEffect: Effect | null
-  currentComponent: Function | null
+  currentOwner: Owner | null
 }
-
-// TODO: 所有者机制
+interface ResourceState<T> {
+  data: T | undefined
+  loading: boolean
+  error: Error | undefined
+}
+interface ResourceAccessor<T> {
+  (): T | undefined
+  loading: boolean
+  error: Error | undefined
+}
 export const ReactiveContext: ReactiveContext = {
   currentEffect: null,
-  currentComponent: null, // TODO: 未实现
+  currentOwner: null,
 }
 
 const batchQueue = new Set<Effect>()
 let isBatching = false
+let effectIdCounter = 0
 
+// 处理批处理队列, 目标: 合并多次信号更新, 避免多次触发副作用, 提高性能
 function processBatch() {
-  isBatching = false
+  if (batchQueue.size === 0) {
+    isBatching = false
+    return
+  }
   const effects = Array.from(batchQueue)
   batchQueue.clear()
   effects.forEach((effect) => {
@@ -41,102 +58,326 @@ function processBatch() {
       }
     }
   })
+  // 如果在执行过程中有新的副作用被添加到队列，继续处理
+  if (batchQueue.size > 0) {
+    Promise.resolve().then(processBatch)
+  } else {
+    isBatching = false
+  }
 }
 
 /**
  * 创建一个响应式数据源（signal），包含一个 getter 和 setter
- * @param initialValue 
- * @returns 
  */
-export function createSignal<T>(initialValue: T) {
+export function createSignal<T>(initialValue: T): [SignalGetter<T>, SignalSetter<T>] {
   let value = initialValue
   const subscribers = new Set<Effect>()
-  const dispose: Dispose = () => {
-    // 清理所有 subscribers 中的 effect.deps 引用
-    subscribers.forEach((effect) => {
-      effect.deps.delete(subscribers)
-    })
-    subscribers.clear()
-  }
 
   const signalGetter: SignalGetter<T> = () => {
+    // 依赖收集：当前正在执行的副作用订阅此信号
     if (ReactiveContext.currentEffect) {
-      subscribers.add(ReactiveContext.currentEffect)
-      ReactiveContext.currentEffect.deps.add(subscribers)
+      const effect = ReactiveContext.currentEffect
+      // TODO: 此处存在循环引用, GC 无法回收, 打破循环手段就是通过所有者清理, 需要优化
+      subscribers.add(effect)
+      effect.dependencies.add(signalGetter)
     }
     return value
   }
-  signalGetter['dispose'] = dispose
 
   const signalSetter: SignalSetter<T> = (newValue) => {
+    // 值没有改变时不触发更新
+    if (Object.is(value, newValue)) {
+      return
+    }
+
     value = newValue
-    const toRemove: Effect[] = []
+
+    // 将有效副作用添加到处理队列,并清理失效的副作用
     subscribers.forEach((effect) => {
-      if (!effect.isActive) {
-        toRemove.push(effect)
-        return
+      if (effect.isActive) {
+        batchQueue.add(effect)
       }
-      // 将 Effect 加入批处理队列
-      batchQueue.add(effect)
+      else {
+        subscribers.delete(effect)
+        effect.dependencies.delete(signalGetter)
+      }
     })
-    // 清理失效的 Effect
-    toRemove.forEach((effect) => {
-      subscribers.delete(effect)
-      effect.deps.delete(subscribers)
-    })
-    // 触发批处理
-    if (!isBatching) {
+
+    if (!isBatching && batchQueue.size > 0) {
       isBatching = true
-      Promise.resolve().then(processBatch) // 进入微任务队列
+      Promise.resolve().then(processBatch)
     }
   }
-  signalSetter['dispose'] = dispose
 
-  return [signalGetter, signalSetter, dispose, subscribers] as const
+  // 预先注册信号（即使暂时没有订阅者）
+  if (ReactiveContext.currentOwner) {
+    ReactiveContext.currentOwner.signals.set(signalGetter, subscribers)
+  }
+
+  return [signalGetter, signalSetter]
 }
 
 /**
- * 创建一个副作用，其回调函数会自动追踪所依赖的 signal，并在这些 signal 变化时重新运行。
- * @remark 重要⚠️，每个 Effect 都应该在某个时机被清理，由于与 signal 存在循环引用，它不会被 GC 自动回收
- * @param callback
- * @returns 清理函数
+ * 创建一个副作用，其回调函数会自动追踪所依赖的 signal，并在这些 signal 变化时重新运行
  */
-export function createEffect(callback: Function): Function {
+export function createEffect(callback: Function): Dispose {
   let isActive = true
   let version = 0
+  const effectId = ++effectIdCounter
+  const dependencies = new Set<SignalGetter>()
 
   const effect: Effect = Object.assign(
     async () => {
       if (!isActive) return
+
       const currentVersion = ++version
+      const prevEffect = ReactiveContext.currentEffect
+
+      // 清理旧的依赖关系
+      dependencies.forEach(signal => {
+        const owner = ReactiveContext.currentOwner
+        if (owner) {
+          const subscribers = owner.signals.get(signal)
+          if (subscribers) {
+            subscribers.delete(effect)
+          }
+        }
+      })
+      dependencies.clear()
 
       try {
         ReactiveContext.currentEffect = effect
         const result = callback()
+
         if (result instanceof Promise) {
           const asyncResult = await result
+          // 检查版本号，确保异步结果仍然有效
           if (version === currentVersion && isActive) {
             return asyncResult
           }
         }
+
+        return result
       } catch (error) {
-        console.error("Error in effect:", error)
+        console.error(`Error in effect ${effectId}:`, error)
       } finally {
-        ReactiveContext.currentEffect = null
+        ReactiveContext.currentEffect = prevEffect
       }
     },
-    { isActive, deps: new Set<Set<Effect>>() }
+    {
+      isActive,
+      dependencies,
+      id: effectId
+    }
   )
 
-  effect()
-  return () => {
+  // 清理函数
+  const cleanup: Dispose = () => {
+    if (!isActive) return
+
     isActive = false
-    effect.isActive = false // 更新 effect 的状态
-    effect.deps.forEach((subscribers: Set<Effect>) => {
-      subscribers.delete(effect)
+    effect.isActive = false
+
+    // 从所有依赖的订阅列表中移除此副作用
+    dependencies.forEach(signal => {
+      const owner = ReactiveContext.currentOwner
+      if (owner) {
+        const subscribers = owner.signals.get(signal)
+        if (subscribers) {
+          subscribers.delete(effect)
+        }
+      }
     })
-    effect.deps.clear()
+    dependencies.clear()
+
+    // 从所有者的副作用集合中移除
+    if (ReactiveContext.currentOwner) {
+      ReactiveContext.currentOwner.effects.delete(effect)
+    }
+  }
+
+  // 注册到所有者
+  if (ReactiveContext.currentOwner) {
+    ReactiveContext.currentOwner.effects.add(effect)
+  }
+
+  // 立即执行副作用以建立初始依赖关系
+  effect()
+
+  return cleanup
+}
+
+/**
+ * 创建计算属性 - 基于其他信号的派生值, 作用: 缓存计算结果, 避免重复计算
+ */
+export function createComputed<T>(computation: () => T): SignalGetter<T> {
+  let value: T
+  let isStale = true
+  const [get, set] = createSignal<T>(undefined as any)
+
+  createEffect(() => {
+    const newValue = computation()
+    if (isStale || !Object.is(value, newValue)) {
+      value = newValue
+      isStale = false
+      set(newValue)
+    }
+  })
+
+  return () => {
+    get() // 触发依赖收集
+    return value
   }
 }
 
+/**
+ * 创建一个所有者上下文，用于管理信号和效果的生命周期
+ */
+export function createOwner(): Owner {
+  return {
+    signals: new Map(),
+    effects: new Set(),
+    dispose() {
+      // 清理所有副作用
+      this.effects.forEach(effect => {
+        effect.isActive = false
+        // 从信号的订阅列表中移除
+        effect.dependencies.forEach(signal => {
+          const subscribers = this.signals.get(signal)
+          if (subscribers) {
+            subscribers.delete(effect)
+          }
+        })
+        effect.dependencies.clear()
+      })
+      this.effects.clear()
 
+      // 清理所有信号的订阅关系
+      this.signals.clear()
+    }
+  }
+}
+
+/**
+ * 在指定所有者上下文中运行函数
+ */
+export function runWithOwner<T>(owner: Owner, fn: () => T): T {
+  const prevOwner = ReactiveContext.currentOwner
+  ReactiveContext.currentOwner = owner
+  try {
+    return fn()
+  } finally {
+    ReactiveContext.currentOwner = prevOwner
+  }
+}
+
+/**
+ * 取消追踪 - 在副作用回调中使用 untrack 访问信号不会与副作用建立依赖关系
+ */
+export function untrack<T>(fn: () => T): T {
+  const prevEffect = ReactiveContext.currentEffect
+  ReactiveContext.currentEffect = null
+
+  try {
+    return fn()
+  } finally {
+    ReactiveContext.currentEffect = prevEffect
+  }
+}
+
+/**
+ * 创建资源 - 用于异步数据获取
+ */
+export function createResource<T, U = any>(
+  source: () => U,
+  fetcher: (source: U, info: { value: T | undefined; refetching: boolean }) => Promise<T>
+): [ResourceAccessor<T>, { refetch: () => void; mutate: (value: T) => void }] {
+  const [state, setState] = createSignal<ResourceState<T>>({
+    loading: false,
+    data: undefined,
+    error: undefined
+  })
+
+  let isAborted = false
+  let fetchId = 0
+  let lastSourceValue: U
+  let hasInitialized = false
+
+  const fetch = async (refetching = false) => {
+    // 取消之前的请求
+    isAborted = true
+
+    const currentFetchId = ++fetchId
+
+    try {
+      // 在 untrack 中获取 source 值，避免在 fetch 中建立依赖
+      const sourceValue = untrack(() => source())
+      const currentState = untrack(() => state())
+
+      setState({
+        loading: true,
+        data: refetching ? currentState.data : undefined,
+        error: undefined
+      })
+
+      const result = await fetcher(sourceValue, {
+        value: currentState.data,
+        refetching
+      })
+
+      // 检查请求是否已被取消或被新请求替代
+      if (currentFetchId === fetchId && !isAborted) {
+        setState({
+          loading: false,
+          data: result,
+          error: undefined
+        })
+      }
+    } catch (error) {
+      if (currentFetchId === fetchId && !isAborted) {
+        const currentState = untrack(() => state())
+        setState({
+          loading: false,
+          data: currentState.data, // 保持之前的数据
+          error: error instanceof Error ? error : new Error(String(error))
+        })
+      }
+    }
+  }
+
+  // 监听 source 变化自动重新获取
+  createEffect(() => {
+    const sourceValue = source()
+
+    // 第一次执行或者 source 值真的变化了才重新获取
+    if (!hasInitialized || !Object.is(lastSourceValue, sourceValue)) {
+      lastSourceValue = sourceValue
+      hasInitialized = true
+      fetch()
+    }
+  })
+
+  const accessor = (() => {
+    return state().data
+  }) as ResourceAccessor<T>
+
+  // 添加响应式属性
+  Object.defineProperty(accessor, 'loading', {
+    get: () => state().loading
+  })
+
+  Object.defineProperty(accessor, 'error', {
+    get: () => state().error
+  })
+
+  const refetch = () => fetch(true)
+  const mutate = (value: T) => {
+    setState({
+      loading: false,
+      data: value,
+      error: undefined
+    })
+  }
+
+  return [accessor, { refetch, mutate }]
+}

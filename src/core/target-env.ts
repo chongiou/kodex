@@ -113,6 +113,7 @@ export interface VariablePrivateProps {
   }
   file: {
     filePath: string,
+    inputModeFileSuffix: string, // NOTE: 可为文件后缀(可换行表示多个后缀), 使用"/"可以表示限制目录
   }
 }
 
