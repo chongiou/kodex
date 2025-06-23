@@ -124,7 +124,7 @@ function hoistValue(name: string, value: any, scope: string, debug = true) {
   return `zdjl.getVar('${name}','${scope}')`
 }
 
-function hoistSignal(signalGetter: SignalGetter, scope: string, context: RenderContext) {
+export function hoistSignal(signalGetter: SignalGetter, scope: string, context: RenderContext) {
   const name = generateUniqueId()
   createEffect(() => {
     const value = signalGetter()

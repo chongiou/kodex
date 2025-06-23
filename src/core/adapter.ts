@@ -1,5 +1,5 @@
-import type { RenderContext } from './renderer'
-import type { AllVariablePropsKeys } from './target-env'
+import { hoistSignal, RenderContext } from './renderer'
+import { AllVariablePropsKeys } from './target-env'
 
 interface convertFunction<T = any, U = any> {
   (value: T, context: AdapterContext): U
@@ -107,6 +107,16 @@ export const adapt = (
         : val.length === 7 ? val : undefined
     }
   }
+  const processSignal = (value: any, adapterContext: AdapterContext) => {
+    if (typeof value === 'function') {
+      const propertyName = adapterContext.targetPath[adapterContext.targetPath.length - 1]
+      if (propertyName && !context.reactiveProps.includes(propertyName)) {
+        context.reactiveProps.push(propertyName)
+      }
+      return hoistSignal(value, context.scope, context)
+    }
+    return value
+  }
   return new UniversalAdapter({
     mappings: [
       // 表单与交互
@@ -130,7 +140,11 @@ export const adapt = (
       { target: 'showInputHiddenDesc', source: 'hideDescription' },
       { target: 'showInputHiddenLabel', source: 'hideLabel', convert: processHiddenLabel },
       { target: 'showInputHiddenView', source: 'hidden' },
-    ]
+    ],
+    postFilter(value, context) {
+      // 处理响应式数据:
+      return ['onChange', 'onClick'].includes(context.sourcePath[0]) ? value : processSignal(value, context)
+    }
   })
     .adapt(elem.props, { mappings })
 }
