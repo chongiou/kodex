@@ -2,7 +2,7 @@ export interface SignalGetter<T = any> {
   (): T
 }
 export interface SignalSetter<T = any> {
-  (newValue: T): void
+  (newValue: T | ((prevValue: T) => T)): void
 }
 interface Dispose {
   (): void
@@ -84,7 +84,16 @@ export function createSignal<T>(initialValue: T): [SignalGetter<T>, SignalSetter
     return value
   }
 
-  const signalSetter: SignalSetter<T> = (newValue) => {
+  const signalSetter: SignalSetter<T> = (newValueOrUpdater) => {
+    let newValue: T
+    
+    if (typeof newValueOrUpdater === 'function') {
+      const updater = newValueOrUpdater as (prevValue: T) => T
+      newValue = updater(value)
+    } else {
+      newValue = newValueOrUpdater
+    }
+
     // 值没有改变时不触发更新
     if (Object.is(value, newValue)) {
       return
@@ -231,7 +240,7 @@ export function createComputed<T>(computation: () => T): SignalGetter<T> {
 }
 
 /**
- * 创建一个所有者上下文，用于管理信号和效果的生命周期
+ * 创建一个所有者上下文，用于管理信号和副作用的生命周期
  */
 export function createOwner(): Owner {
   return {
