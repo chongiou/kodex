@@ -1,7 +1,6 @@
 import { COLORS, compareDictWithPath, deepTraverse, generateUniqueId } from '@/utils'
 import { createJsAction, definedVar, switchToVarMode, switchToVarModeForAction } from './target-env'
 import { createEffect, createOwner, Owner, runWithOwner, SignalGetter } from '@/core/reactive'
-import { space } from './utils'
 import type { Variable, AllVariableTypes } from './target-env'
 import { adapt } from './adapter'
 
@@ -9,7 +8,6 @@ import { adapt } from './adapter'
 declare const zdjl: any
 
 export class DialogContext {
-  isUserCancel = true
   dialogContextExpr = ''
   constructor(context: RenderContext) {
     this.dialogContextExpr = hoistValue(
@@ -18,17 +16,13 @@ export class DialogContext {
       context.scope
     )
   }
-  reload() {
-    throw new Error('方法未实现')
-  }
-  closeDialog() {
-    this.isUserCancel = false
+  cancel() {
     zdjl.runAction({ type: '按键', keyCode: 4 })
   }
 }
 
 export interface RendererHooks {
-  afterRender?(context: RenderContext): void
+  dialogReady?(context: RenderContext): void
 }
 
 interface ElementConfig {
@@ -84,7 +78,7 @@ export class RenderContext {
       if (!newValue) return
       if (!initialized) {
         initialized = true
-        this.hooks.afterRender?.(this)
+        this.hooks.dialogReady?.(this)
         oldValue = JSON.parse(JSON.stringify(newValue))
         return
       }
@@ -178,7 +172,7 @@ const ELEMENT_CONFIGS: Record<string, ElementConfig> = {
           target: 'textContent', source: 'children', convert() {
             if (elem.props.children) {
               if (elem.props.children?.type === 'expr') {
-                const expr = elem.props.children.props.value || ''
+                const expr = elem.props.children.props.value ?? ''
                 context.addReactiveProperty('textContent')
                 return expr
               } else {
@@ -306,78 +300,85 @@ const ELEMENT_CONFIGS: Record<string, ElementConfig> = {
 export class Renderer {
   render(rootComponent: JSX.Element, options: { storageId?: string; hooks?: RendererHooks } = {}) {
     const context = new RenderContext()
-    context.hooks = options.hooks || {}
+    context.hooks = options.hooks ?? {}
 
     return runWithOwner(context.owner, () => {
-      const storageId = options.storageId || (typeof rootComponent.type === 'function' ? rootComponent.type.name : generateUniqueId())
+      const storageId = options.storageId ?? (typeof rootComponent.type === 'function' ? rootComponent.type.name : generateUniqueId())
       context.viewId = `view$${storageId}`
 
-      // 提取根元素
-      const [headerElement, mainElement, footerElement] = this.extractRootElements(rootComponent)
-
-      // 处理各部分
-      const header = headerElement ? this.processHeader(headerElement, context) : { isReactive: false, title: space() }
-      const main = this.processElement(mainElement, context)
-      const footer = footerElement ? this.processFooter(footerElement, context) : {}
-
-      // 创建事件发射器
-      const eventEmitter = context.createValueChangeEmitter()
-      const eventListenerFunc = hoistFunc(eventEmitter, context.scope)
-
-      // 创建变量和动作
-      const vars = [
-        switchToVarMode(
-          definedVar(context.eventEmitId, {
-            varType: 'ui_text',
-            textSize: 0,
-            textContent: `${eventListenerFunc}(zdjl.getVar('${context.viewId}')),null`
-          }),
-          ['textContent']
-        ),
-        definedVar(context.viewId, {
-          varType: 'object',
-          showInput: true,
-          mustInput: false,
-          showInputHiddenLabel: true,
-          objectVars: Array.isArray(main) ? main : [main],
-          syncValueOnChange: true,
-        })
-      ]
-
-      const action = switchToVarModeForAction(
-        {
-          type: '设置变量',
-          vars: vars,
-          dialogTitle: header.title,
-          dialogOKText: footer.okText,
-          dialogCancelText: footer.cancelText,
-          dialogCancelAction: footer.exprForCancelCallback ? createJsAction(footer.exprForCancelCallback) : undefined,
-        },
-        {
-          dialogTitle: header.isReactive,
-          dialogOKText: footer.okTextIsReactive,
-          dialogCancelText: footer.cancelTextIsReactive,
-        }
-      )
-
-      return {
-        action,
-        vars: main,
-        show: async () => {
-          if (typeof zdjl === 'undefined') {
-            throw new Error('未处于目标环境,无法使用API: zdjl.runActionAsync')
-          }
-          try {
-            await zdjl.runActionAsync(action)
-            const raw = zdjl.getVar(context.viewId)
-            const input = this.processInput(raw, context)
-            return { raw, input }
-          } finally {
-            context.cleanup()
-          }
-        }
-      }
+      return this.executeRender(rootComponent, context)
     })
+  }
+
+  private executeRender(rootComponent: JSX.Element, context: RenderContext) {
+    // 提取根元素
+    const [headerElement, mainElement, footerElement] = this.extractRootElements(rootComponent)
+
+    // 处理各部分
+    const header = headerElement ? this.processHeader(headerElement, context) : { isReactive: false, title: undefined }
+    const main = [this.processElement(mainElement, context)].flat()
+    const footer = footerElement ? this.processFooter(footerElement, context) : {}
+
+    // 创建事件发射器
+    const eventEmitter = context.createValueChangeEmitter()
+    const eventListenerFunc = hoistFunc(eventEmitter, context.scope)
+
+    // 创建变量和动作
+    const vars = [
+      switchToVarMode(
+        definedVar(context.eventEmitId, {
+          varType: 'ui_text',
+          textSize: 0,
+          textContent: `${eventListenerFunc}(zdjl.getVar('${context.viewId}')),null`
+        }),
+        ['textContent']
+      ),
+      definedVar(context.viewId, {
+        varType: 'object',
+        showInput: true,
+        mustInput: false,
+        showInputHiddenLabel: true,
+        objectVars: main,
+        syncValueOnChange: true,
+      })
+    ]
+
+    const action = switchToVarModeForAction(
+      {
+        type: '设置变量' as const,
+        vars: vars,
+        dialogTitle: header.title,
+        dialogOKText: footer.okText,
+        dialogCancelText: footer.cancelText,
+        dialogCancelAction: footer.exprForCancelCallback ? createJsAction(footer.exprForCancelCallback) : undefined,
+      },
+      {
+        dialogTitle: header.isReactive,
+        dialogOKText: footer.okTextIsReactive,
+        dialogCancelText: footer.cancelTextIsReactive,
+      }
+    )
+
+    const show = async () => {
+      if (typeof zdjl === 'undefined') {
+        throw new Error('未处于目标环境,无法使用API: zdjl.runActionAsync')
+      }
+      try {
+        await zdjl.runActionAsync(action)
+        const raw: Record<string, any> = zdjl.getVar(context.viewId)
+        const input = this.processInput(raw, context)
+        return { raw, input }
+      } finally {
+        context.cleanup()
+      }
+    }
+
+    return {
+      /**不要试图手动运行 action, 因为那会导致内部清理工作失效，进而导致内存泄漏, 请使用 show 方法 */
+      action,
+      vars: main,
+      show
+    }
   }
 
   private extractRootElements(rootComponent: JSX.Element) {
@@ -416,13 +417,19 @@ export class Renderer {
   }
 
   private processFooter(elem: JSX.Element, context: RenderContext) {
-    const result: any = {}
+    const result: {
+      exprForCancelCallback?: string
+      cancelTextIsReactive?: boolean
+      cancelText?: string
+      okTextIsReactive?: boolean
+      okText?: string
+    } = {}
     const children = [elem.props.children].flat()
 
     if (children[0]?.type === 'button') {
       const btn = children[0]
       if (btn.props.onClick) {
-        result.exprForCancelCallback = `${hoistFunc(btn.props.onClick, context.scope)}()`
+        result.exprForCancelCallback = `${hoistFunc(btn.props.onClick, context.scope)}()` // TODO: 如果要实现 close,这里需要判断是否是主动触发还是用户触发
       }
       const [cancelTextIsReactive, cancelText] = processText(btn.props.children, context)
       result.cancelTextIsReactive = cancelTextIsReactive
