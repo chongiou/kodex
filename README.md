@@ -1,133 +1,102 @@
 # Kodex
-Kodex 是一个为自动精灵平台设计的声明式 UI 工具，其使用 JSX 结构描述自动精灵的 UI(设置变量动作)
 
-# 预览
+Kodex 是一个运行时 DSL 渲染引擎，Kodex 不是传统意义上的框架或库，它通过 JSX 这种声明式语法，将 UI 描述转换为目标环境( `zdjl` )的具体实现，提供了从组件定义到最终渲染的完整解决方案。
 
+## ✨ 核心特性
 
-# TODO
-- [x] 值更改事件 : onChange
-- [x] 弹窗已创建Hook : dialogCreated
-- [ ] select 元素更改默认选中 : 本身不提供,但可以通过更改 options 数组来实现
-- [ ] 处理额外文本初次值为空字符串时后续更新无效的问题：即使没有使用Kodex也会这样，可能是自动精灵的机制或bug使然。可以通过显示一个1像素的图片来模拟空字符串
+- **作用域互通**: 打通了弹窗表达式与动作的作用域
+- **响应式数据绑定**: 自动同步数据变化与界面更新
+- **组件化开发**: 使用可复用的组件构建复杂界面
+- **声明式语法**: 用简洁的标记语言描述界面结构
+- **事件处理**: 按钮交互与值更改事件响应
 
-# NOTE
-- 当 color 不是全格式时闪退
-- 当 backgroundColor 为 null 时闪退
-- 当 var name 不合法时闪退  
+## 🚀 快速开始
 
-# 图表
+### 安装
 
-## 核心架构图
-```mermaid
-graph TB
-    subgraph "响应式核心 (reactive.ts)"
-        Signal[Signal系统]
-        Effect[Effect副作用]
-        Owner[Owner所有者]
-        Resource[Resource资源]
-        
-        Signal --> Effect
-        Effect --> Owner
-        Owner --> Signal
-    end
-    
-    subgraph "适配器层 (adapter.ts)"
-        UniversalAdapter[UniversalAdapter]
-        Mapping[属性映射配置]
-        Context[AdapterContext]
-        
-        Mapping --> UniversalAdapter
-        Context --> UniversalAdapter
-    end
-    
-    subgraph "渲染引擎 (renderer.ts)"
-        Renderer[Renderer渲染器]
-        RenderContext[RenderContext渲染上下文]
-        ElementConfigs[元素配置表]
-        DialogContext[DialogContext对话框上下文]
-        
-        ElementConfigs --> Renderer
-        RenderContext --> Renderer
-        DialogContext --> RenderContext
-    end
-    
-    subgraph "外部环境"
-        ZDJL[zdjl API]
-        JSXElements[JSX元素]
-    end
-    
-    JSXElements --> Renderer
-    Renderer --> UniversalAdapter
-    UniversalAdapter --> Signal
-    Renderer --> ZDJL
-    RenderContext --> Owner
+```shell
+没发版
 ```
 
-## 渲染流程图
-```mermaid
-flowchart TD
-    Start[开始渲染] --> ExtractRoot[提取根元素]
-    ExtractRoot --> ProcessHeader[处理Header]
-    ExtractRoot --> ProcessMain[处理Main]
-    ExtractRoot --> ProcessFooter[处理Footer]
-    
-    ProcessMain --> CheckType{检查元素类型}
-    CheckType -->|Component| HandleComponent[处理组件]
-    CheckType -->|Native Element| ConvertElement[转换为变量]
-    
-    HandleComponent --> ExecuteComponent[执行组件函数]
-    ExecuteComponent --> ProcessChildren[处理子元素]
-    ProcessChildren --> CheckType
-    
-    ConvertElement --> GetConfig[获取元素配置]
-    GetConfig --> CreateAdapter[创建适配器]
-    CreateAdapter --> ApplyMapping[应用属性映射]
-    ApplyMapping --> ProcessReactive[处理响应式属性]
-    
-    ProcessReactive --> GenerateVar[生成变量定义]
-    GenerateVar --> RegisterSignal[注册信号]
-    
-    ProcessHeader --> CreateAction[创建动作]
-    ProcessFooter --> CreateAction
-    GenerateVar --> CreateAction
-    
-    CreateAction --> HoistValues[提升值到全局]
-    HoistValues --> CreateEventEmitter[创建事件发射器]
-    CreateEventEmitter --> ReturnResult[返回渲染结果]
-    
-    ReturnResult --> End[渲染完成]
-  ```
+### 导入
 
-## 关键数据流
-```mermaid
-sequenceDiagram
-    participant JSX as JSX组件
-    participant Renderer as 渲染器
-    participant Adapter as 适配器
-    participant Reactive as 响应式系统
-    participant ZDJL as 目标环境
-    
-    JSX->>Renderer: 传入JSX元素
-    Renderer->>Renderer: 提取根元素结构
-    
-    loop 处理每个元素
-        Renderer->>Adapter: 创建适配器并应用映射
-        Adapter->>Adapter: 属性转换和过滤
-        Adapter-->>Renderer: 返回转换后的属性
-        
-        alt 如果有响应式属性
-            Renderer->>Reactive: 创建Signal
-            Reactive->>ZDJL: 注册信号变化监听
-        end
-        
-        Renderer->>Renderer: 生成变量定义
-    end
-    
-    Renderer->>ZDJL: 提升函数和值
-    Renderer->>ZDJL: 创建事件发射器
-    Renderer->>ZDJL: 执行动作
-    
-    ZDJL-->>Renderer: 返回用户输入
-    Renderer->>Renderer: 处理输入数据
-    Renderer-->>JSX: 返回结果
+```js
+没发版
 ```
+
+### 基本概念
+
+- **组件 (Component)**: 组件是可复用的 UI 单元，类似 HTML 标签但功能更强大。  
+- **响应式数据**: 当数据发生变化时，界面会自动更新以反映这些变化。  
+- **事件处理**: 当用户与界面交互时（如点击按钮），可以触发相应的处理函数。
+
+### 创建你的第一个界面
+
+```jsx
+import { render, createSignal } from '@zdjl/kodex'
+
+// 定义根组件
+function Counter() {
+  const [count, setCount] = createSignal(0)
+  return (
+    <button onClick={() => setCount(count() + 1)}>Count is: {count}</button>
+  )
+}
+
+// 渲染界面
+const result = await render(<Counter />).show()
+```
+
+> Counter 是一个自定义组件，这个概念在 学习 Kodex 中会提到
+
+### 效果
+
+![效果](./docs/images/counter-example.gif)
+
+### 🔍 让我们看看发生了什么
+
+1. 创建了一个初始值为 0 的响应式数据源 count 信号（Signal）。返回 getter 和 setter 用于读取和修改信号
+   
+   ```jsx
+   const [count, setCount] = createSignal(0)
+   ```
+
+2. button 引用了这个数据 `Count is: {count}`
+   
+   > 这里看起来像语法糖，但其实不是的，响应式数据应该包裹在函数内让内部调用获取，即应为：`Count is: {() => count()}` ，但由于 count 本身也是函数就可以直接传递了
+   
+   ```jsx
+   <button ... >Count is: {count}</button>
+   ```
+
+3. button 在其点击事件内修改了数据 `onClick={() => setCount(count() + 1)}`
+   
+   ```jsx
+   <button onClick={() => setCount(count() + 1)}> ... </button>
+   ```
+
+4. 每次点击时执行事件处理函数  `() => setCount(count() + 1)`，即使用之前的值并加 1
+
+5. 每次修改信号后，UI 立即反应其变化
+
+### 🎉 So easy, right?
+
+想象一下，使用传统方式需要几个步骤？你可能会嘴硬，但——让我们看看更复杂的用例！
+
+(待施工)
+
+## 📖 学习 Kodex
+
+[学习 Kodex](./docs/Learn-Kodex.md)
+
+## 📜 API 参考
+
+[API 参考](./docs/API-Reference.md)
+
+## 🤝 贡献
+
+欢迎 PR 和 Issue
+
+## ⚖️许可证
+
+MIT
