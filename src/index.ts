@@ -49,10 +49,10 @@ declare global {
         onChange?(newValue: any): void
       }
     }
-    export interface Element<T extends keyof IntrinsicElements = keyof IntrinsicElements> {
-      type: T | Function
+    export interface Element {
+      type: keyof IntrinsicElements | Function
       props:
-      & IntrinsicElements[T]
+      & IntrinsicElements[keyof IntrinsicElements]
       & CommonProps
       & { [x: string]: any, children?: any }
     }
@@ -68,7 +68,7 @@ function jsx<T extends keyof JSX.IntrinsicElements | Function>(
   if (props.children && Array.isArray(props.children)) {
     props.children = props.children.flat(Infinity) as JSXNode[]
   }
-  return { type, props } as JSX.Element<T extends keyof JSX.IntrinsicElements ? T : any>
+  return { type, props } as JSX.Element
 }
 
 const Fragment = (props: any) => props.children
