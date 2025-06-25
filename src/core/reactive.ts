@@ -16,6 +16,9 @@ interface Effect {
 export interface Owner {
   signals: Map<SignalGetter, Set<Effect>>  // 信号 -> 订阅的副作用集合
   effects: Set<Effect>                     // 所有副作用
+  mountCallbacks: Array<() => void>
+  cleanupCallbacks: Array<() => void>
+  isMounted: boolean
   dispose(): void
 }
 interface ReactiveContext {
@@ -40,6 +43,46 @@ export const ReactiveContext: ReactiveContext = {
 const batchQueue = new Set<Effect>()
 let isBatching = false
 let effectIdCounter = 0
+
+/**
+ * 执行挂载回调
+ */
+export function executeMountCallbacks(owner: Owner): void {
+  if (!owner.isMounted) {
+    owner.isMounted = true
+    owner.mountCallbacks.forEach(callback => {
+      try {
+        callback()
+      } catch (error) {
+        console.error('Error in mount callback:', error)
+      }
+    })
+  }
+}
+
+/**
+ * 注册清理回调
+ */
+export function onCleanup(callback: () => void): void {
+  const owner = ReactiveContext.currentOwner
+  if (owner) {
+    owner.cleanupCallbacks.push(callback)
+  }
+}
+
+/**
+ * 注册挂载回调
+ */
+export function onMount(callback: () => void): void {
+  const owner = ReactiveContext.currentOwner
+  if (owner) {
+    if (owner.isMounted) {
+      callback()
+    } else {
+      owner.mountCallbacks.push(callback)
+    }
+  }
+}
 
 // 处理批处理队列, 目标: 合并多次信号更新, 避免多次触发副作用, 提高性能
 function processBatch() {
@@ -86,7 +129,7 @@ export function createSignal<T>(initialValue: T): [SignalGetter<T>, SignalSetter
 
   const signalSetter: SignalSetter<T> = (newValueOrUpdater) => {
     let newValue: T
-    
+
     if (typeof newValueOrUpdater === 'function') {
       const updater = newValueOrUpdater as (prevValue: T) => T
       newValue = updater(value)
@@ -246,7 +289,21 @@ export function createOwner(): Owner {
   return {
     signals: new Map(),
     effects: new Set(),
+    mountCallbacks: [],
+    cleanupCallbacks: [],
+    isMounted: false,
     dispose() {
+      this.cleanupCallbacks.forEach(callback => {
+        try {
+          callback()
+        } catch (error) {
+          console.error('Error in cleanup callback:', error)
+        }
+      })
+      this.cleanupCallbacks = []
+      this.mountCallbacks = []
+      this.isMounted = false
+
       // 清理所有副作用
       this.effects.forEach(effect => {
         effect.isActive = false

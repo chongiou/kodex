@@ -1,6 +1,6 @@
 import { COLORS, compareDictWithPath, deepTraverse, generateUniqueId } from '@/utils'
 import { createJsAction, definedVar, switchToVarMode, switchToVarModeForAction } from './target-env'
-import { createEffect, createOwner, Owner, runWithOwner, SignalGetter } from '@/core/reactive'
+import { createEffect, createOwner, Owner, runWithOwner, SignalGetter, executeMountCallbacks } from '@/core/reactive'
 import type { Variable, AllVariableTypes } from './target-env'
 import { adapt } from './adapter'
 
@@ -21,10 +21,6 @@ export class DialogContext {
   }
 }
 
-export interface RendererHooks {
-  dialogReady?(context: RenderContext): void
-}
-
 interface ElementConfig {
   varType: AllVariableTypes | ((elem: JSX.Element) => AllVariableTypes)
   convert: (elem: JSX.Element, context: RenderContext, varname: string) => Record<string, any>
@@ -32,7 +28,6 @@ interface ElementConfig {
 
 export class RenderContext {
   public eventListeners = new Map<string, Function>()
-  public hooks: RendererHooks = {}
   public cleanupFns: Function[] = []
   public reactiveProps: string[] = []
   public reservedNames = new Map<string, string>()
@@ -78,7 +73,7 @@ export class RenderContext {
       if (!newValue) return
       if (!initialized) {
         initialized = true
-        this.hooks.dialogReady?.(this)
+        executeMountCallbacks(this.owner)
         oldValue = JSON.parse(JSON.stringify(newValue))
         return
       }
@@ -298,9 +293,8 @@ const ELEMENT_CONFIGS: Record<string, ElementConfig> = {
 }
 
 export class Renderer {
-  render(rootComponent: JSX.Element, options: { storageId?: string; hooks?: RendererHooks } = {}) {
+  render(rootComponent: JSX.Element, options: { storageId?: string } = {}) {
     const context = new RenderContext()
-    context.hooks = options.hooks ?? {}
 
     return runWithOwner(context.owner, () => {
       const storageId = options.storageId ?? (typeof rootComponent.type === 'function' ? rootComponent.type.name : generateUniqueId())
