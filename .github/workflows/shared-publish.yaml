@@ -1,0 +1,48 @@
+name: Shared Publish Pipeline
+on:
+  workflow_call:
+    inputs:
+      release_type:
+        description: "发布类型 (beta/production)"
+        type: string
+        required: true
+      npm_tag:
+        description: "NPM 发布标签 (e.g. beta/latest)"
+        type: string
+        default: "latest"
+    secrets:
+      NPM_TOKEN:
+        required: true
+
+jobs:
+  build-and-publish:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Publish package
+        run: npm publish --tag ${{ inputs.npm_tag }}
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: ${{ inputs.release_type == 'beta' && 'Prerelease' || 'Release' }} v${{ env.VERSION }}
+          tag_name: v${{ env.VERSION }}
+          token: ${{ secrets.GITHUB_TOKEN }}
