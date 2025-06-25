@@ -43,6 +43,9 @@ declare global {
         selected?: any | SignalGetter
       }
       position: {}
+      fragment: {
+        children?: Element | Element[]
+      }
     }
     export type IntrinsicElements = {
       [K in keyof RawIntrinsicElements]: RawIntrinsicElements[K] & CommonProps & {

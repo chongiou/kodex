@@ -40,7 +40,7 @@ export function jsx(strings: TemplateStringsArray, ...values: unknown[]): JSX.El
       identifier += currentChar
       next()
     }
-    return identifier
+    return identifier === '' ? 'fragment' : identifier
   }
 
   // 工具函数: 读取字符串(属性值引号内部内容)
