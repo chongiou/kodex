@@ -447,6 +447,10 @@ export class Renderer {
   }
 
   private processElement(elem: JSX.Element, context: RenderContext): Variable | Variable[] {
+    if (elem.type === 'fragment') {
+      elem = { type: (x: any) => x.children, props: elem.props }
+    }
+    
     if (typeof elem.type === 'function') {
       return this.handleComponent(elem, context)
     }
