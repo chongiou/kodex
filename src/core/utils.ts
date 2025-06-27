@@ -6,46 +6,17 @@ export const space = (width: number = 1, height: number = 1) => {
   return `#MD<img width="${width}" height="${height}" src="data:image/png;base64,${one_pixel}"/>`
 }
 
-export class Markdown {
-  part: string[]
-  constructor() {
-    this.part = []
+/** 目标环境补丁, 用于设置 select 元素的 selected 值, 需要为 option 元素使用信号值 */
+export const optionsDecorator = <T extends any[] = any[]>([optionsGetter, optionsSetter]: [SignalGetter<T>, SignalSetter<T>]) => {
+  // NOTE：当只剩下一个选项时，目标环境自动选中该选项，然后在 100ms 后恢复原来的选项(太快无效，原因未知)，完成选中指定值
+  const setSelected = async (selected: T[number]) => {
+    const cache = optionsGetter()
+    optionsSetter([selected] as T[number])
+    await sleep(100).then(() => optionsSetter(cache))
   }
-  add(text: string) {
-    return this.part.push(text), this
-  }
-  end(separator?: string) {
-    return '#MD' + this.part.join(separator)
-  }
-  static usePrefix(text: string) {
-    return '#MD' + text
-  }
-  static space(width: number = 1, height: number = 1) {
-    return `<img width="${width}" height="${height}" src="data:image/png;base64,${one_pixel}"/>`
-  }
-  static image(width: number | string = 'auto', height: number | string = 'auto', src: string) {
-    return `<img width="${width}" height="${height}" src="${src}"/>`
-  }
-  static font(text: string, style?: { color?: string, size?: number, align?: 'left' | 'center' | 'right' }) {
-    const { color = '#fff', size = 3, align = 'left' } = style ?? {}
-    return `<div align="${align}"><font color="${color}" size="${size}">${text}</font></div>`
-  }
-  static br() {
-    return '<br/>'
-  }
-  static hr() {
-    return '<hr/>'
-  }
-  static title(text: string, level = 1) {
-    return `<h${level}>${text}</h${level}>`
-  }
-}
-
-/** 设置 select 元素的 selected 值, 需要为 select 元素使用信号值 */
-export const setSelected = async (ctrl: [SignalGetter, SignalSetter], selectedVal: string) => {
-  const [getter, setter] = ctrl
-  const cache = getter()
-  setter([selectedVal])
-  await sleep(100)
-  setter(cache)
+  return [
+    optionsGetter,
+    optionsSetter,
+    setSelected,
+  ] as const
 }
