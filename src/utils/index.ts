@@ -20,6 +20,7 @@ export const typeOf = (val: any) => {
   }
   return type as string
 }
+
 export const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 const deepEqual = (a: any, b: any): a is typeof b => {
@@ -95,6 +96,13 @@ export const compareDictWithPath = <T extends Dict, K extends Dict>(
   return changes
 }
 
+/**
+ * 创建防抖函数
+ * @param fn 要防抖的函数
+ * @param delay 防抖延迟时间（毫秒）
+ * @param immediate 是否立即执行
+ * @returns 防抖后的函数
+ */
 export function createDebounce(fn: Function, delay: number, immediate = false) {
   let timer: NodeJS.Timeout | null = null
 
@@ -123,11 +131,6 @@ export function createDebounce(fn: Function, delay: number, immediate = false) {
   }
 }
 
-export type UnionToIntersection<U> =
-  (U extends any ? (k: U) => void : never) extends ((k: infer I) => void)
-  ? I
-  : never
-
 export enum COLORS {
   GREEN = '\x1b[32m',
   CYAN = '\x1b[36m',
@@ -137,6 +140,9 @@ export enum COLORS {
   RESET = '\x1b[0m',
 }
 
+/**
+ * 深度遍历对象
+ */
 export function deepTraverse(obj: Record<string, any>, callback: (key: string, value: unknown, path: string[]) => void, path: string[] = []) {
   if (obj == null) return
 
@@ -150,49 +156,4 @@ export function deepTraverse(obj: Record<string, any>, callback: (key: string, v
       deepTraverse(value, callback, currentPath)
     }
   })
-}
-
-class TestContext {
-  constructor(public context: {
-    pass: boolean,
-    expectValue: any,
-    actualValue: any
-  }) {
-
-  }
-}
-
-export const expect = (val: any) => {
-  return {
-    toBe(expectValue: any) {
-      const context = {
-        expectValue,
-        actualValue: val
-      }
-      if (val === expectValue) {
-        throw new TestContext({
-          pass: true,
-          ...context,
-        })
-      } else {
-        throw new TestContext({
-          pass: false,
-          ...context,
-        })
-      }
-    }
-  }
-}
-
-export const test = (desc: string, fn: Function) => {
-  try {
-    fn()
-  } catch (e) {
-    if (e instanceof TestContext) {
-      console.log(`"${desc}" 期望 ${e.context.expectValue} 实际`, e.context.actualValue, `${e.context.pass ? '通过✅' : '未通过❌'}`)
-    }
-    if (!(e instanceof TestContext)) {
-      console.error(`Error in "${desc}":\n`, e)
-    }
-  }
 }
