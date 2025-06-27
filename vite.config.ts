@@ -9,7 +9,7 @@ const productionConfig = () =>
   defineConfig({
     plugins: [
       react({ jsxRuntime: 'automatic', jsxImportSource: path.resolve('src') }),
-      compress(['.cjs']),
+      compress(['.cjs'], ['index.cjs', 'jsx-runtime.cjs']),
     ],
     resolve: {
       alias: {
@@ -18,10 +18,14 @@ const productionConfig = () =>
     },
     build: {
       minify: false,
-      outDir: 'lib',
+      outDir: 'dist',
       lib: {
         entry: {
           'index': 'src/index.ts',
+          'core': 'src/core/index.ts',
+          'utils/parse-jsx-string': 'src/utils/parse-jsx-string.ts',
+          'utils/components': 'src/utils/components.tsx',
+          'jsx-runtime': 'src/jsx-runtime.ts',
         },
         formats: ['es', 'cjs'],
       },
@@ -39,7 +43,7 @@ const testConfig = () =>
       zdjl({
         output: {
           outdir: 'dist',
-          filename: `${pkg.name}.test`,
+          filename: `kodex.test`,
           formats: ['zjs']
         },
         manifest: {
@@ -60,6 +64,7 @@ const testConfig = () =>
         entry: 'src/test/index.tsx',
         formats: ['es'],
       },
+      outDir: 'cache'
     },
   })
 
