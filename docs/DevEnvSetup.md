@@ -2,22 +2,29 @@
 
 实际上 JSX 语法是可选的。你完全可以不使用标签，而是使用 Kodex 导出的 jsx 工厂函数，该函数用于创建 JSX 元素，不过，使用它有一定的门槛，你需要了解 Kodex 支持的元素、属性等。一般来说不太有人愿意这么用。
 
-## 配置 Kodex 的开发环境
+# 配置 Kodex 的开发环境
 
-安装构建工具 和 环境类型定义(可选)
+Kodex 的目标是在 `zdjl` 上运行, 我们有两种方式可以选:
+1. 配置编译环境，从 JSX 文件编译并打包成 `zjs` 文件
+2. 不配置编译环境，在 `zdjl` 环境使用 `jsx` (字符串)语法
+3. 配置打包环境，从 JS 文件编译并打包 `zjs` 文件 - 可行但不推荐
 
+## 方式一
+配置编译环境，从 JSX 文件编译并打包成 `zjs` 文件
+
+安装构建依赖
 ```shell
-npm install vite vite-mjs-to-zjs @vitejs/plugin-react @types/node
+npm i vite vite-mjs-to-zjs @vitejs/plugin-react
 ```
 
-### 配置 vite 编译环境
+### 配置 vite
 在项目根目录创建文件 `./vite.config.js` 或 `./vite.config.ts`
 
 配置参考:
 ```js
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react' // 用于编译 JSX 语法, 转为工厂函数的调用
-import zdjl from 'vite-mjs-to-zjs' // 用于打包 zjs 文件
+import zdjl from 'vite-mjs-to-zjs' // 用于打包 zjs 文件， 有关用法请查看其 Github 页面
 import path from 'path'
 import pkg from './package.json'
 
@@ -29,7 +36,6 @@ export default defineConfig({
       }),
       zdjl({
         output: {
-          outdir: 'dist',
           filename: `${pkg.name}.test`,
           formats: ['zjs']
         },
@@ -51,11 +57,12 @@ export default defineConfig({
         entry: 'src/index.tsx',
         formats: ['es'],
       },
+      outDir: 'dist',
     },
   })
 ```
 
-### 配置 Typescript (可选)
+### 配置 Typescript （JSX 类型提示）
 在项目根目录创建文件 `./tsconfig.json`
 
 配置参考:
@@ -94,7 +101,7 @@ export default defineConfig({
 }
 ```
 
-## 无编译环境
+## 方式二
 
 你可以在无编译环境中使用 Kodex，Kodex 发布的包中有独立工具可以解析 JSX 字符串。通过这个工具，你不需要事先编译 JSX 代码。它类似 Lit 框架的开发体验，但更简易，且没有类型和高亮。
 
