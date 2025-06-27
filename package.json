@@ -1,26 +1,41 @@
 {
-  "name": "kodex",
+  "name": "@zdjl/kodex",
   "version": "1.0.0",
   "publishConfig": {
     "access": "public"
   },
-  "main": "./lib/index.cjs",
-  "types": "./lib/index.d.ts",
+  "main": "./dist/index.cjs",
+  "types": "./dist/index.d.ts",
   "exports": {
     ".": {
-      "types": "./lib/index.d.ts",
-      "import": "./lib/index.js",
-      "require": "./lib/index.cjs"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./utils/core": {
+      "types": "./dist/utils/core.d.ts",
+      "import": "./dist/utils/core.js",
+      "require": "./dist/utils/core.cjs"
+    },
+    "./utils/parse-jsx-string": {
+      "types": "./dist/utils/parse-jsx-string.d.ts",
+      "import": "./dist/utils/parse-jsx-string.js",
+      "require": "./dist/utils/parse-jsx-string.cjs"
+    },
+    "./utils/components": {
+      "types": "./dist/utils/components.d.ts",
+      "import": "./dist/utils/components.js",
+      "require": "./dist/utils/components.cjs"
     },
     "./jsx-runtime": {
-      "types": "./lib/index.d.ts",
-      "import": "./lib/index.js",
-      "require": "./lib/index.cjs"
+      "types": "./dist/index.d.ts",
+      "import": "./dist/jsx-runtime.js",
+      "require": "./dist/jsx-runtime.cjs"
     },
     "./package.json": "./package.json"
   },
   "files": [
-    "lib"
+    "dist"
   ],
   "description": "Create ui in zdjl platform",
   "keywords": [
@@ -34,11 +49,13 @@
   "author": "重楼 <chongiou@qq.com>",
   "type": "module",
   "scripts": {
-    "build:dts": "dts-bundle-generator --inline-declare-global -o lib/index.d.ts src/index.ts",
+    "build:dts": "npm run build:dts:index && npm run build:dts:parse-jsx-string",
+    "build:dts:index": "dts-bundle-generator --inline-declare-global -o dist/index.d.ts src/index.ts",
+    "build:dts:parse-jsx-string": "dts-bundle-generator --no-check -o dist/utils/parse-jsx-string.d.ts src/utils/parse-jsx-string.ts",
     "build": "vite build && npm run build:dts",
     "test:build": "vite build --mode test",
     "test:watch": "nodemon",
-    "test:push": "node --import tsx scripts/push.ts dist/kodex.test.zjs to sdcard/自动精灵 ",
+    "test:push": "node --import tsx scripts/push.ts cache/kodex.test.zjs to sdcard/自动精灵 ",
     "prerelease": "npm version prerelease --preid=beta && git push origin main --tags",
     "postversion": "git push origin main --tags"
   },
@@ -50,6 +67,14 @@
     "terser": "^5.39.2",
     "tsx": "^4.19.3",
     "vite": "^6.3.3",
-    "vite-mjs-to-zjs": "^1.0.2"
+    "vite-mjs-to-zjs": "^1.0.3"
+  },
+  "homepage": "https://github.com/chongiou/kodex",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/chongiou/kodex.git"
+  },
+  "bugs": {
+    "url": "https://github.com/chongiou/kodex/issues"
   }
 }
