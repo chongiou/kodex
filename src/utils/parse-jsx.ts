@@ -1,4 +1,4 @@
-
+import '@/types/jsx'
 /**
  * 基于游标的命令式 JSX 字符串解析工具。不支持单标签，使用双斜线结束组件
  */
@@ -248,5 +248,5 @@ export function jsx(strings: TemplateStringsArray, ...values: unknown[]): JSX.El
     throw new Error('在根元素后存在意外内容')
   }
 
-  return result as JSX.Element
+  return result
 }
