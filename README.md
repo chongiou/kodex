@@ -1,6 +1,6 @@
 # Kodex
 
-Kodex 是一个运行时 DSL 渲染引擎，Kodex 不是传统意义上的框架或库，它通过 JSX 这种声明式语法，将 UI 描述转换为目标环境( `zdjl` )的具体实现，提供了从组件定义到最终渲染的完整解决方案。
+Kodex 是一个运行时 DSL UI 渲染引擎，它通过 JSX 这种声明式语法，将 UI 描述转换为目标环境( `zdjl` )的具体实现，提供了从组件定义到最终渲染的完整解决方案。
 
 ## ✨ 核心特性
 
@@ -12,23 +12,28 @@ Kodex 是一个运行时 DSL 渲染引擎，Kodex 不是传统意义上的框架
 
 ## 🚀 快速开始
 
-### 安装
-
-```shell
-没发版
-```
-
-### 导入
-
-```js
-没发版
-```
-
 ### 基本概念
 
 - **组件 (Component)**: 组件是可复用的 UI 单元，类似 HTML 标签但功能更强大。  
 - **响应式数据**: 当数据发生变化时，界面会自动更新以反映这些变化。  
 - **事件处理**: 当用户与界面交互时（如点击按钮），可以触发相应的处理函数。
+
+## 安装
+
+```shell
+没发版
+```
+
+## 导入
+
+```js
+没发版
+```
+
+如果你不熟悉 ESM 的模块语法请查看 MDN 的 [import](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Statements/import) 和 [export](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Statements/export) 文档 
+
+## 配置开发环境
+[配置开发环境](./docs/DevEnvSetup.md)
 
 ### 创建你的第一个界面
 
@@ -87,11 +92,11 @@ const result = await render(<Counter />).show()
 
 ## 📖 学习 Kodex
 
-[学习 Kodex](./docs/Learn-Kodex.md)
+(待施工)
 
 ## 📜 API 参考
 
-[API 参考](./docs/API-Reference.md)
+(待施工)
 
 ## 🤝 贡献
 
