@@ -1,5 +1,5 @@
 import { SignalGetter } from "@/core/reactive"
-import { DialogContext } from "@/core/renderer"
+import { ChangeContext } from "@/core/renderer"
 
 interface Action {
   type: string,
@@ -47,7 +47,7 @@ export interface CommonProps {
    * @remark 在某些时候记忆的值会丢失: 1. UI结构发生变化(多在开发阶段) 2. 脚本文件名发生变化
    * */
   memo?: boolean
-  /** 值更改事件 */ onChange?(context: DialogContext & EventTarget): void
+  /** 值更改事件 */ onChange?(ctx: ChangeContext): void
   /** 是否必填 */ required?: boolean | SignalGetter<boolean> | Function
 
   // 文本与内容

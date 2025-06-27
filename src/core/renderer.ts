@@ -26,8 +26,15 @@ interface ElementConfig {
   convert: (elem: JSX.Element, context: RenderContext, varname: string) => Record<string, any>
 }
 
+export interface ChangeContext {
+  path: string
+  oldValue: unknown
+  newValue: unknown
+  cancel(): void
+}
+
 export class RenderContext {
-  public eventListeners = new Map<string, Function>()
+  public eventListeners = new Map<string, (ctx: ChangeContext) => void>()
   public cleanupFns: Function[] = []
   public reactiveProps: string[] = []
   public reservedNames = new Map<string, string>()
@@ -48,7 +55,7 @@ export class RenderContext {
   pushPath(name: string) { this.pathStack.push(name) }
   popPath() { if (this.pathStack.length > 1) this.pathStack.pop() }
 
-  addEventListener(fn: Function) {
+  addEventListener(fn: (ctx: ChangeContext) => void) {
     this.eventListeners.set(`${this.currentPath}.var$${this.varCounter}`, fn)
   }
 
@@ -83,7 +90,8 @@ export class RenderContext {
         diff.forEach(change => {
           const path = `view.${change.path}`
           const eventListener = this.eventListeners.get(path)
-          eventListener && eventListener({ ...change, ...this.dialogContext })
+          const ctx: ChangeContext = { ...change, cancel: () => this.dialogContext.cancel() }
+          eventListener && eventListener(ctx)
         })
       }
     }
