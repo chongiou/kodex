@@ -43,6 +43,6 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
-          name: ${{ inputs.release_type == 'beta' && 'Prerelease' || 'Release' }} v${{ env.VERSION }}
-          tag_name: v${{ env.VERSION }}
+          name: ${{ inputs.release_type == 'beta' && 'Prerelease' || 'Release' }} ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
