@@ -1,4 +1,4 @@
-import '@/types/jsx'
+import '@/types/global'
 
 export * from '@/core/renderer'
 export * from '@/core/reactive'
