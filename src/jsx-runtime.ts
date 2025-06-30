@@ -1,4 +1,4 @@
-import '@/types/jsx'
+import '@/types/global'
 
 type JSXNode = JSX.Element | string | number | boolean | null | undefined
 
