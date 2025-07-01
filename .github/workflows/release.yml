@@ -12,3 +12,14 @@ jobs:
       npm_tag: "latest"
     secrets:
       NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  create-release:
+    needs: call-shared-pipeline
+    runs-on: ubuntu-latest
+    steps:
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          name: Release ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          token: ${{ secrets.GITHUB_TOKEN }}
