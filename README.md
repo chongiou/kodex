@@ -92,11 +92,11 @@ const result = await render(<Counter />).show()
 
 ## 📖 学习 Kodex
 
-(待施工)
+[学习 Kodex](./docs/Tutorial.md)
 
 ## 📜 API 参考
 
-(待施工)
+[API 参考](./docs/APIReference.md)
 
 ## 🤝 贡献
 
