@@ -2,6 +2,10 @@
 
 Kodex 是一个运行时 DSL UI 渲染引擎，它通过 JSX 这种声明式语法，将 UI 描述转换为目标环境( `zdjl` )的具体实现，提供了从组件定义到最终渲染的完整解决方案。
 
+## 🌱社区资源
+
+- [1027734941](https://qm.qq.com/q/k5IkZNKJ3i)：官方交流群
+
 ## ✨ 核心特性
 
 - **作用域互通**: 打通了弹窗表达式与动作的作用域
@@ -21,13 +25,13 @@ Kodex 是一个运行时 DSL UI 渲染引擎，它通过 JSX 这种声明式语�
 ## 安装
 
 ```shell
-没发版
+npm i @zdjl/kodex
 ```
 
 ## 导入
 
 ```js
-没发版
+import {} from '@zdjl/kodex'
 ```
 
 如果你不熟悉 ESM 的模块语法请查看 MDN 的 [import](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Statements/import) 和 [export](https://developer.mozilla.org/zh-CN/docs/Web/JavaScript/Reference/Statements/export) 文档 
@@ -44,7 +48,7 @@ import { render, createSignal } from '@zdjl/kodex'
 function Counter() {
   const [count, setCount] = createSignal(0)
   return (
-    <button onClick={() => setCount(count() + 1)}>Count is: {count}</button>
+    <button onClick={() => setCount(prev => prev + 1)}>Count is: {count}</button>
   )
 }
 
@@ -60,7 +64,7 @@ const result = await render(<Counter />).show()
 
 ### 🔍 让我们看看发生了什么
 
-1. 创建了一个初始值为 0 的响应式数据源 count 信号（Signal）。返回 getter 和 setter 用于读取和修改信号
+1. 创建了一个初始值为 0 的响应式数据源 count 信号（Signal）。返回 getter 和 setter 用于读取和更新信号
    
    ```jsx
    const [count, setCount] = createSignal(0)
@@ -68,27 +72,23 @@ const result = await render(<Counter />).show()
 
 2. button 引用了这个数据 `Count is: {count}`
    
-   > 这里看起来像语法糖，但其实不是的，响应式数据应该包裹在函数内让内部调用获取，即应为：`Count is: {() => count()}` ，但由于 count 本身也是函数就可以直接传递了
-   
    ```jsx
    <button ... >Count is: {count}</button>
    ```
-
-3. button 在其点击事件内修改了数据 `onClick={() => setCount(count() + 1)}`
+   
+3. button 在其点击事件内修改了数据 `onClick={() => setCount(prev => prev + 1)}`
    
    ```jsx
-   <button onClick={() => setCount(count() + 1)}> ... </button>
+   <button onClick={() => setCount(prev => prev + 1)}> ... </button>
    ```
 
-4. 每次点击时执行事件处理函数  `() => setCount(count() + 1)`，即使用之前的值并加 1
+4. 每次点击时执行事件处理函数  `() => setCount(prev => prev + 1)`，即使用之前的值并加 1
 
 5. 每次修改信号后，UI 立即反应其变化
 
 ### 🎉 So easy, right?
 
-想象一下，使用传统方式需要几个步骤？你可能会嘴硬，但——让我们看看更复杂的用例！
-
-(待施工)
+想象一下，使用传统方式需要几个步骤？下一步，开始学习 Kodex  用法！
 
 ## 📖 学习 Kodex
 
