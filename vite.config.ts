@@ -23,7 +23,7 @@ const productionConfig = () =>
         entry: {
           'index': 'src/index.ts',
           'core': 'src/core/index.ts',
-          'utils/parse-jsx-string': 'src/utils/parse-jsx-string.ts',
+          'utils/jsx-parser': 'src/utils/jsx-parser.ts',
           'utils/components': 'src/utils/components.tsx',
           'jsx-runtime': 'src/jsx-runtime.ts',
         },
@@ -42,12 +42,15 @@ const testConfig = () =>
       }),
       zdjl({
         output: {
-          outdir: 'dist',
-          filename: `kodex.test`,
+          filename: 'kodex.test',
           formats: ['zjs']
         },
         manifest: {
-          description: `build-date: ${new Date().toLocaleString()}\nversion: ${pkg.version}\nauthor: ${pkg.author}\nlicense: ${pkg.license}`,
+          description: `\
+            构建日期: ${new Date().toLocaleString()}
+            版本: ${pkg.version}
+            作者: ${pkg.author}
+            许可证: ${pkg.license}`.replace(/[^\S\n]{2,}/g, ''),
           count: 'unknown',
         }
       }),

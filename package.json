@@ -49,9 +49,8 @@
   "author": "重楼 <chongiou@qq.com>",
   "type": "module",
   "scripts": {
-    "build:dts": "npm run build:dts:index && npm run build:dts:parse-jsx-string",
+    "build:dts": "npm run build:dts:index",
     "build:dts:index": "dts-bundle-generator --inline-declare-global -o dist/index.d.ts src/index.ts",
-    "build:dts:parse-jsx-string": "dts-bundle-generator --no-check -o dist/utils/parse-jsx-string.d.ts src/utils/parse-jsx-string.ts",
     "build": "vite build && npm run build:dts",
     "test:build": "vite build --mode test",
     "test:watch": "nodemon",
