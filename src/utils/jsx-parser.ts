@@ -208,7 +208,7 @@ export function jsx(strings: TemplateStringsArray, ...values: unknown[]): JSX.El
       }
     } else {
       type = readIdentifier()
-      if (!type || type === 'fragment') {
+      if (!type) {
         throw createError(`标签名不能为空`, tagStart + 1)
       }
     }
@@ -321,4 +321,3 @@ export function jsx(strings: TemplateStringsArray, ...values: unknown[]): JSX.El
     throw error
   }
 }
-
