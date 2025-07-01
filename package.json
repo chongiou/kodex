@@ -1,6 +1,6 @@
 {
   "name": "@zdjl/kodex",
-  "version": "1.0.1-beta.2",
+  "version": "1.0.1-beta.3",
   "publishConfig": {
     "access": "public"
   },
