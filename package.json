@@ -12,21 +12,6 @@
       "import": "./dist/index.js",
       "require": "./dist/index.cjs"
     },
-    "./utils/core": {
-      "types": "./dist/utils/core.d.ts",
-      "import": "./dist/utils/core.js",
-      "require": "./dist/utils/core.cjs"
-    },
-    "./utils/parse-jsx-string": {
-      "types": "./dist/utils/parse-jsx-string.d.ts",
-      "import": "./dist/utils/parse-jsx-string.js",
-      "require": "./dist/utils/parse-jsx-string.cjs"
-    },
-    "./utils/components": {
-      "types": "./dist/utils/components.d.ts",
-      "import": "./dist/utils/components.js",
-      "require": "./dist/utils/components.cjs"
-    },
     "./jsx-runtime": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js",

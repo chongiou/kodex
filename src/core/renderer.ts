@@ -111,7 +111,7 @@ export class RenderContext {
 }
 
 // 工具函数
-function hoistValue(name: string, value: any, scope: string, debug = true) {
+function hoistValue(name: string, value: any, scope: string, debug = false) {
   if (typeof zdjl !== 'undefined') {
     zdjl.setVar(name, value, scope)
   }
@@ -125,7 +125,6 @@ export function hoistSignal(signalGetter: SignalGetter, scope: string, context: 
   const name = generateUniqueId()
   createEffect(() => {
     const value = signalGetter()
-    console.log('hoistSignal', name, value)
     hoistValue(name, value, scope)
   })
   return `zdjl.getVar('${name}','${scope}')`
