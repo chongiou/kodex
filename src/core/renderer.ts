@@ -40,8 +40,8 @@ export class RenderContext {
   public reservedNames = new Map<string, string>()
   public owner: Owner = createOwner()
   public scope = `kodex.context.${generateUniqueId()}`
-  public viewId = `view$${generateUniqueId()}`
-  public eventEmitId = `eventEmit$${generateUniqueId()}`
+  public viewId = `view_${generateUniqueId()}`
+  public eventEmitId = `eventEmit_${generateUniqueId()}`
   public isUserCancel = true
   public dialogContext = new DialogContext(this)
 
@@ -50,13 +50,13 @@ export class RenderContext {
 
   get currentPath() { return this.pathStack.join('.') }
 
-  generateVarName() { return `var$${++this.varCounter}` }
+  generateVarName() { return `var_${++this.varCounter}` }
 
   pushPath(name: string) { this.pathStack.push(name) }
   popPath() { if (this.pathStack.length > 1) this.pathStack.pop() }
 
   addEventListener(fn: (ctx: ChangeContext) => void) {
-    this.eventListeners.set(`${this.currentPath}.var$${this.varCounter}`, fn)
+    this.eventListeners.set(`${this.currentPath}.var_${this.varCounter}`, fn)
   }
 
   addReactiveProperty(prop: string) {
@@ -225,7 +225,7 @@ const ELEMENT_CONFIGS: Record<string, ElementConfig> = {
       return 'string'
     },
     convert: (elem, context) => {
-      const value = processSignal(elem.props.value, context)
+      const value = elem.props.value
       return adapt(elem, context, [
         {
           condition: () => elem.props.type === 'number',
@@ -305,7 +305,7 @@ export class Renderer {
 
     return runWithOwner(context.owner, () => {
       const storageId = options.storageId ?? (typeof rootComponent.type === 'function' ? rootComponent.type.name : generateUniqueId())
-      context.viewId = `view$${storageId}`
+      context.viewId = `view_${storageId}`
 
       return this.executeRender(rootComponent, context)
     })
@@ -527,7 +527,7 @@ export class Renderer {
 
     if (context.reservedNames.size) {
       deepTraverse(raw, (key, value) => {
-        if (!key.startsWith('var$')) return
+        if (!key.startsWith('var_')) return
         const reservedName = context.reservedNames.get(key)
         if (reservedName) {
           if (input[reservedName] == null) {
