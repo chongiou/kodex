@@ -34,7 +34,7 @@ export interface ChangeContext {
 }
 
 export class RenderContext {
-  public eventListeners = new Map<string, (ctx: ChangeContext) => void>()
+  public eventListeners = new Map<string, Function>()
   public cleanupFns: Function[] = []
   public reactiveProps: string[] = []
   public reservedNames = new Map<string, string>()
@@ -55,8 +55,9 @@ export class RenderContext {
   pushPath(name: string) { this.pathStack.push(name) }
   popPath() { if (this.pathStack.length > 1) this.pathStack.pop() }
 
-  addEventListener(fn: (ctx: ChangeContext) => void) {
-    this.eventListeners.set(`${this.currentPath}.var_${this.varCounter}`, fn)
+  addEventListener(listener: Function): true {
+    this.eventListeners.set(this.currentPath, listener)
+    return true
   }
 
   addReactiveProperty(prop: string) {
@@ -87,11 +88,11 @@ export class RenderContext {
       const diff = compareDictWithPath(oldValue, newValue)
       if (diff.length) {
         oldValue = JSON.parse(JSON.stringify(newValue))
-        diff.forEach(change => {
+        diff.forEach(async change => {
           const path = `view.${change.path}`
           const eventListener = this.eventListeners.get(path)
           const ctx: ChangeContext = { ...change, cancel: () => this.dialogContext.cancel() }
-          eventListener && eventListener(ctx)
+          if (eventListener) eventListener(ctx)
         })
       }
     }
@@ -451,7 +452,7 @@ export class Renderer {
     if (elem.type === 'fragment') {
       elem = { type: (x: any) => x.children, props: elem.props }
     }
-    
+
     if (typeof elem.type === 'function') {
       return this.handleComponent(elem, context)
     }
