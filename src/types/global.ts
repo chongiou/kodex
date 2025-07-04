@@ -47,9 +47,7 @@ declare global {
       }
     }
     export type IntrinsicElements = {
-      [K in keyof RawIntrinsicElements]: RawIntrinsicElements[K] & CommonProps & {
-        onChange?(newValue: any): void
-      }
+      [K in keyof RawIntrinsicElements]: RawIntrinsicElements[K] & CommonProps
     }
     export interface Element {
       type: keyof IntrinsicElements | Function
