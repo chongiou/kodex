@@ -25,7 +25,7 @@ Kodex 是一个在 `zdjl` 环境中渲染原生对话框的 UI 框架。它使�
    
    ```javascript
    // 类似于这样的转换结果
-   jsx({ type: 'text', children: name }); 
+   jsx('text', { "children": name }); 
    ```
 
 3. **Kodex 的魔法**:
