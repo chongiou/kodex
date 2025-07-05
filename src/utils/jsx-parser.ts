@@ -1,10 +1,14 @@
 import '@/types/global'
 
 /**
- * 基于游标的命令式 JSX 字符串解析工具。不支持单标签，使用双斜线结束组件
+ * 基于游标的命令式 JSX 字符串解析工具。支持单标签和双标签，组件可使用双斜线结束
  */
 export function jsx(strings: TemplateStringsArray, ...values: unknown[]): JSX.Element {
   // 合并 strings 和 values，生成带占位符的字符串
+  // 判断是否缺失占位符
+  if (strings.length !== values.length + 1) {
+    console.warn('[jxs-parser] 警告:模板字符串与占位符不匹配')
+  }
   let source = ''
   const placeholders = new Map()
   strings.forEach((str, i) => {
@@ -216,8 +220,26 @@ export function jsx(strings: TemplateStringsArray, ...values: unknown[]): JSX.El
     const props = parseAttributes()
     skipWhitespace()
 
+    // 检查是否是单标签
+    if (currentChar as string === '/' && source[index + 1] === '>') {
+      // 单标签处理
+      next() // 跳过 /
+      next() // 跳过 >
+      
+      // 构造单标签节点
+      const node: {
+        type: string | Function,
+        props: {
+          [x: string]: any,
+          children?: any,
+        }
+      } = { type, props }
+      
+      return node
+    }
+
     if (currentChar as string !== '>') {
-      throw createError(`期望标签结束符 '>'，但找到 '${currentChar || 'EOF'}'`)
+      throw createError(`期望标签结束符 '>' 或单标签结束符 '/>'，但找到 '${currentChar || 'EOF'}'`)
     }
     next() // 跳过 >
 
