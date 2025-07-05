@@ -183,17 +183,19 @@ npx vite build
 ```
 构建成功后，查看 `./dist` 目录是否生成 js 文件和 zjs 文件
 
-## 方式二 (未经测试，若发现问题可开启 issue)
+## 方式二
 
 你可以在无编译环境中使用 Kodex，Kodex 发布的包中有独立工具可以解析 JSX 字符串。通过这个工具，你不需要事先编译 JSX 代码。它类似 Lit 框架的开发体验，但更简易，且没有类型和高亮。
 
 以 `zdjl` 环境为例，通过该工具可做到开箱即用
+> 由于还未正式发布, 此处使用 beta 版本
 
 ```js
-const { createSignal } = require('@zdjl/kodex/dist/core.min.cjs')
-const { jsx } = require('@zdjl/kodex/dist/utils/jsx-parser.min.cjs')
+const { createSignal, render } = require(`@zdjl/kodex@beta/dist/core.min.cjs`)
+const { jsx } = require(`@zdjl/kodex@beta/dist/utils/jsx-parser.min.cjs`)
+globalThis.zdjl = zdjl // 暴露到全局，让模块能访问到
 
-function MyComponent (props) {
+ function MyComponent (props) {
   return jsx`<text extraTextAbove=${props.tip}>${props.children}</text>`
 }
 
@@ -202,11 +204,16 @@ function Counter () {
 
   return jsx`
     <>
-      <${MyComponent} tip='计数：'>${count}<//>
-      <button onClick=${() => setCount(count() + 1)}>Count is: ${count}</button>
+      <input type='text' name='user_in' value=${count}></input>
+      <${MyComponent} tip='计数:'>${count}<//>
+      <button onClick=${() => setCount(count() + 1)}>增加计数</button>
     </>
   `
 }
+
+const counterDialog = render(jsx`<${Counter}><//>`)
+const res = await counterDialog.show()
+console.log(res.input)
 ```
 
 上面这个例子展示了如何在无编译环境中：嵌套组件、传递静态属性、传递信号、设定事件
