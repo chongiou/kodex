@@ -1,315 +1,311 @@
 import '@/types/global'
 
 /**
- * 基于游标的命令式 JSX 字符串解析工具。支持单标签和双标签，组件可使用双斜线结束
+ * JSX 模板字符串解析器, 自定义组件使用 `<//>` 闭合 或 单标签闭合方式
  */
-export function jsx(strings: TemplateStringsArray, ...values: unknown[]): JSX.Element {
-  // 合并 strings 和 values，生成带占位符的字符串
-  // 判断是否缺失占位符
+export function parseJSX(strings: TemplateStringsArray, ...values: unknown[]): JSX.Element {
   if (strings.length !== values.length + 1) {
-    console.warn('[jxs-parser] 警告:模板字符串与占位符不匹配')
+    throw new Error('[JSX Parser] 模板字符与值未对应')
   }
-  let source = ''
-  const placeholders = new Map()
-  strings.forEach((str, i) => {
-    source += str
+  const parts: string[] = []
+  const placeholders: unknown[] = []
+
+  for (let i = 0; i < strings.length; i++) {
+    parts.push(strings[i])
     if (i < values.length) {
-      const placeholder = `__PLACEHOLDER_${i}__`
-      source += placeholder
-      placeholders.set(placeholder, values[i])
+      parts.push(`\x00${i}\x00`)
+      placeholders[i] = values[i]
     }
-  })
-
-  // 移除多余空白和换行
-  source = source.replace(/\s*\n\s*/g, '').trim()
-
-  // 跟踪解析位置
-  let index = 0
-  let currentChar = source[0]
-
-  // 工具函数: 获取当前位置的上下文信息
-  function getContext(pos = index, contextLength = 20) {
-    const start = Math.max(0, pos - contextLength)
-    const end = Math.min(source.length, pos + contextLength)
-    const before = source.slice(start, pos)
-    const after = source.slice(pos, end)
-    return `"${before}|${after}" (位置 ${pos})`
   }
 
-  // 工具函数: 创建格式化的错误信息
-  function createError(message: string, pos = index) {
-    return new Error(`${message}\n位置: ${getContext(pos)}`)
+  const source = parts.join('').replace(/\s+/g, ' ').trim()
+
+  const len = source.length
+  let pos = 0
+
+  // 字符查找表
+  const isWhitespace = (char: string) => char === ' ' || char === '\t' || char === '\n' || char === '\r'
+  const isAlpha = (char: string) => (char >= 'a' && char <= 'z') || (char >= 'A' && char <= 'Z')
+  const isDigit = (char: string) => char >= '0' && char <= '9'
+  const isAlphaNum = (char: string) => isAlpha(char) || isDigit(char)
+
+  // 工具函数
+  function getStringWidth(str: string) {
+    let width = 0
+    for (const char of str) {
+      // 中文字符、日文、韩文等通常宽度为2，其他字符宽度为1
+      width += char.codePointAt(0)! > 255 ? 2 : 1
+    }
+    return width
   }
 
-  // 工具函数: 移动到下一个字符
-  function next() {
-    index++
-    currentChar = source[index]
+  function createError(message: string, position = pos) {
+    const contextLength = 20
+    const start = Math.max(0, position - contextLength)
+    const end = Math.min(len, position + contextLength)
+    const before = source.slice(start, position)
+    const after = source.slice(position, end)
+    const context = `${before}|${after}`
+    const posHelp = ' '.repeat(getStringWidth(before))
+
+    const error = new Error(`[JSX Parser] ${message}\n${posHelp}_\n${context}\n${posHelp}^`)
+      ; (error as any).context = context
+      ; (error as any).pos = position
+      ; (error as any).posHelp = `${posHelp}^`
+
+    return error
   }
 
-  // 工具函数: 跳过空白
+  function getCurrentChar() {
+    return pos < len ? source[pos] : 'EOF'
+  }
+
   function skipWhitespace() {
-    while (/\s/.test(currentChar)) next()
+    while (pos < len && isWhitespace(source[pos])) pos++
   }
 
-  // 工具函数: 读取标识符(标签名/属性名)
   function readIdentifier() {
-    let identifier = ''
-    const startPos = index
-    while (/[a-zA-Z0-9]/.test(currentChar)) {
-      identifier += currentChar
-      next()
-    }
-    if (identifier === '') {
-      if (/[^a-zA-Z0-9\s>\/="]/.test(currentChar)) {
-        throw createError(`标识符包含无效字符 '${currentChar}'`, startPos)
-      }
-      return 'fragment'
-    }
-    return identifier
+    const start = pos
+    while (pos < len && isAlphaNum(source[pos])) pos++
+    return pos > start ? source.slice(start, pos) : null
   }
 
-  // 工具函数: 读取字符串(属性值引号内部内容)
   function readString() {
-    const quote = currentChar // " 或 '
-    const startPos = index
-    next() // 跳过开头的引号
-    let value = ''
-    while (currentChar !== quote && currentChar) {
-      if (currentChar === '\\') {
-        next() // 跳过转义符
-        if (!currentChar) {
-          throw createError(`字符串未闭合，缺少结束引号 ${quote}`, startPos)
-        }
-        value += currentChar
-      } else {
-        value += currentChar
-      }
-      next()
-    }
-    if (!currentChar) {
-      throw createError(`字符串未闭合，缺少结束引号 ${quote}`, startPos)
-    }
-    next() // 跳过结尾的引号
-    return value
-  }
+    const quote = source[pos] // 记录引号类型
+    const quotePos = pos
+    pos++ // 跳过开始引号
+    const start = pos
 
-  // 工具函数: 读取数字
-  function readNumber() {
-    let number = ''
-    const startPos = index
-    while (/[0-9.]/.test(currentChar)) {
-      number += currentChar
-      next()
+    while (pos < len && source[pos] !== quote) {
+      if (source[pos] === '\\') pos++ // 跳过转义字符
+      pos++
     }
-    const result = parseFloat(number)
-    if (isNaN(result)) {
-      throw createError(`无效的数字格式 '${number}'`, startPos)
+
+    if (pos >= len) {
+      throw createError(`字符串未闭合，缺少结束引号 '${quote}'`, quotePos)
     }
+
+    const result = source.slice(start, pos)
+    pos++ // 跳过结束引号
     return result
   }
 
-  // 工具函数: 读取占位符(动态表达式)
+  function readNumber() {
+    const start = pos
+    while (pos < len && (isDigit(source[pos]) || source[pos] === '.')) pos++
+    const numberStr = source.slice(start, pos)
+    const result = parseFloat(numberStr)
+
+    if (isNaN(result)) {
+      throw createError(`无效的数字格式 '${numberStr}'`, start)
+    }
+
+    return result
+  }
+
   function readPlaceholder() {
-    let placeholder = ''
-    const startPos = index
-    while (/[A-Z0-9_]/.test(currentChar)) {
-      placeholder += currentChar
-      next()
+    const placeholderStart = pos
+    pos++ // 跳过 \x00
+    const start = pos
+    while (pos < len && isDigit(source[pos])) pos++
+
+    if (pos === start) {
+      throw createError('占位符格式错误，缺少索引', placeholderStart)
     }
-    if (!placeholders.has(placeholder)) {
-      throw createError(`未找到占位符 '${placeholder}'，可能是模板字符串插值错误`, startPos)
+
+    const index = parseInt(source.slice(start, pos))
+
+    if (pos >= len || source[pos] !== '\x00') {
+      throw createError('占位符格式错误，缺少结束标记', placeholderStart)
     }
-    return placeholders.get(placeholder)
+
+    pos++ // 跳过结束的 \x00
+
+    if (index >= placeholders.length) {
+      throw createError(`占位符索引超出范围: ${index}，最大索引: ${placeholders.length - 1}`, placeholderStart)
+    }
+
+    return placeholders[index]
   }
 
-  // 工具函数: 读取文本内容
   function readText() {
-    let text = ''
-    while (currentChar && currentChar !== '<' && !source.slice(index, index + 14).startsWith('__PLACEHOLDER_')) {
-      text += currentChar
-      next()
-    }
-    return text.trim() // 移除首尾空白
+    const start = pos
+    while (pos < len && source[pos] !== '<' && source[pos] !== '\x00') pos++
+    const text = source.slice(start, pos).trim()
+    return text || null
   }
 
-  // 解析属性
   function parseAttributes() {
-    const props: { [x: string]: any } = {}
-    skipWhitespace()
+    const props: Record<string, any> = {}
 
-    while (currentChar !== '>' && currentChar !== '/' && currentChar) {
-      // 检查是否是 rest 语法 (...${props})
-      if (currentChar === '.' && source.slice(index, index + 3) === '...') {
-        const spreadStart = index
-        index += 3 // 跳过 ...
-        currentChar = source[index]
+    while (pos < len) {
+      skipWhitespace()
 
-        // 必须是占位符
-        if (!(currentChar === '_' && source.slice(index, index + 14).startsWith('__PLACEHOLDER_'))) {
-          throw createError(`展开语法 ... 后必须跟随模板字符串插值`, spreadStart)
+      if (source[pos] === '>' || source[pos] === '/') break
+
+      // 处理展开语法
+      if (source.slice(pos, pos + 3) === '...') {
+        const spreadStart = pos
+        pos += 3
+
+        if (source[pos] !== '\x00') {
+          throw createError('展开语法 ... 后必须跟随模板字符串插值', spreadStart)
         }
 
         const restProps = readPlaceholder()
         if (typeof restProps !== 'object' || restProps === null || Array.isArray(restProps)) {
-          throw createError(`展开的属性必须是纯对象，收到: ${typeof restProps}`)
+          throw createError(`展开的属性必须是纯对象，收到: ${typeof restProps}`, spreadStart)
         }
 
-        // 合并属性
         Object.assign(props, restProps)
-      } else {
-        // 原有属性解析逻辑
-        const keyStart = index
-        const key = readIdentifier()
-        if (!key || key === 'fragment') {
-          throw createError(`属性名不能为空`, keyStart)
-        }
-        skipWhitespace()
-
-        if (currentChar !== '=') {
-          // 简写属性 (如 disabled)
-          props[key] = true
-        } else {
-          next() // 跳过 =
-          skipWhitespace()
-
-          let value
-          if (currentChar as string === '"' || currentChar as string === "'") {
-            value = readString()
-          } else if (/[0-9]/.test(currentChar)) {
-            value = readNumber()
-          } else if (currentChar as string === '_' && source.slice(index, index + 14).startsWith('__PLACEHOLDER_')) {
-            value = readPlaceholder()
-          } else {
-            const valueStart = index
-            throw createError(`属性 '${key}' 的值必须是字符串、数字或模板字符串插值`, valueStart)
-          }
-          props[key] = value
-        }
+        continue
       }
+
+      // 读取属性名
+      const keyStart = pos
+      const key = readIdentifier()
+      if (!key) {
+        throw createError(`无效的属性名，期望字母或数字，但找到 '${getCurrentChar()}'`, keyStart)
+      }
+
       skipWhitespace()
+
+      if (source[pos] !== '=') {
+        props[key] = true
+        continue
+      }
+
+      pos++ // 跳过 =
+      skipWhitespace()
+
+      // 读取属性值
+      const valueStart = pos
+      const char = source[pos]
+      let value: any
+
+      if (char === '"' || char === "'") {
+        value = readString()
+      } else if (isDigit(char)) {
+        value = readNumber()
+      } else if (char === '\x00') {
+        value = readPlaceholder()
+      } else {
+        throw createError(`属性 '${key}' 的值必须是字符串、数字或模板字符串插值，但找到 '${char}'`, valueStart)
+      }
+
+      props[key] = value
     }
+
     return props
   }
 
-  // 解析节点(标签或组件)
   function parseNode(): any {
-    if (currentChar !== '<') {
-      throw createError(`期望标签开始符 '<'，但找到 '${currentChar || 'EOF'}'`)
-    }
-    const tagStart = index
-    next() // 跳过 <
+    const nodeStart = pos
 
-    let type
+    if (source[pos] !== '<') {
+      throw createError(`期望标签开始符 '<'，但找到 '${getCurrentChar()}'`, pos)
+    }
+
+    pos++ // 跳过 <
+
+    // 解析标签名或组件
+    let type: any
     let isComponent = false
 
-    // 检查是否是组件(以 ${...} 开头)
-    if (currentChar as string === '_' && source.slice(index, index + 14).startsWith('__PLACEHOLDER_')) {
+    if (source[pos] === '\x00') {
       isComponent = true
-      type = readPlaceholder() // 获取组件函数/引用
-      if (typeof type !== 'function' && typeof type !== 'string') {
-        throw createError(`组件必须是函数或字符串，收到: ${typeof type}`)
+      type = readPlaceholder()
+
+      if (typeof type !== 'function') {
+        throw createError(`预期为函数组件，但收到: ${Object.prototype.toString.call(type).slice(8,-1)}`, nodeStart)
       }
     } else {
+      const tagStart = pos
       type = readIdentifier()
       if (!type) {
-        throw createError(`标签名不能为空`, tagStart + 1)
+        throw createError(`标签名不能为空，期望字母或数字，但找到 '${getCurrentChar()}'`, tagStart)
       }
     }
 
+    // 解析属性
     const props = parseAttributes()
     skipWhitespace()
 
-    // 检查是否是单标签
-    if (currentChar as string === '/' && source[index + 1] === '>') {
-      // 单标签处理
-      next() // 跳过 /
-      next() // 跳过 >
-      
-      // 构造单标签节点
-      const node: {
-        type: string | Function,
-        props: {
-          [x: string]: any,
-          children?: any,
-        }
-      } = { type, props }
-      
-      return node
+    // 检查单标签
+    if (source.slice(pos, pos + 2) === '/>') {
+      pos += 2
+      return { type, props }
     }
 
-    if (currentChar as string !== '>') {
-      throw createError(`期望标签结束符 '>' 或单标签结束符 '/>'，但找到 '${currentChar || 'EOF'}'`)
+    if (source[pos] !== '>') {
+      throw createError(`期望标签结束符 '>' 或单标签结束符 '/>'，但找到 '${getCurrentChar()}'`, pos)
     }
-    next() // 跳过 >
+
+    pos++ // 跳过 >
 
     // 解析子节点
-    const children = []
-    while (currentChar && (currentChar !== '<' || source[index + 1] !== '/')) {
-      if (/\s/.test(currentChar)) {
-        skipWhitespace()
-        continue
-      }
-      if (currentChar === '<') {
+    const children: any[] = []
+
+    while (pos < len && source.slice(pos, pos + 2) !== '</') {
+      skipWhitespace()
+      if (pos >= len || source.slice(pos, pos + 2) === '</') break
+
+      if (source[pos] === '<') {
         children.push(parseNode())
-      }
-      else if (currentChar === '_' && source.slice(index, index + 14).startsWith('__PLACEHOLDER_')) {
+      } else if (source[pos] === '\x00') {
         children.push(readPlaceholder())
-      }
-      else {
+      } else {
         const text = readText()
-        if (text) {
-          children.push(text)
-        } else {
-          throw createError(`意外的字符 '${currentChar}'`)
-        }
+        if (text) children.push(text)
       }
     }
 
     // 解析闭合标签
-    if (!currentChar) {
-      throw createError(`标签 '${isComponent ? '[组件]' : type}' 未闭合，缺少结束标签`, tagStart)
-    }
-    if (currentChar !== '<' || source[index + 1] !== '/') {
-      throw createError(`期望结束标签 '</'，但找到 '${currentChar}${source[index + 1] || ''}'`)
+    if (pos >= len) {
+      throw createError(`标签 '${isComponent ? type.name : type}' 未闭合，缺少结束标签`, nodeStart)
     }
 
-    const closeStart = index
-    next() // 跳过 <
-    next() // 跳过 /
+    if (source.slice(pos, pos + 2) !== '</') {
+      throw createError(`期望结束标签 '</'，但找到 '${source.slice(pos, pos + 2)}'`, pos)
+    }
 
-    // 检查闭合标签
-    let closingTag
-    if (currentChar as string === '/' && source[index + 1] === '>') {
-      // 支持组件 <//> 闭合
+    const closeStart = pos
+    pos += 2 // 跳过 </
+
+    if (source.slice(pos, pos + 2) === '/>') {
+      // 组件 <//> 闭合
       if (!isComponent) {
         throw createError(`普通标签 '${type}' 不能使用 <//>  闭合，应使用 </${type}>`, closeStart)
       }
-      next() // 跳过 /
-      next() // 跳过 >
+      pos += 2
     } else {
-      closingTag = readIdentifier()
+      // 普通闭合标签
+      const closingStart = pos
+      const closingTag = readIdentifier()
+
+      if (!closingTag) {
+        throw createError(`结束标签名不能为空，期望字母或数字，但找到 '${getCurrentChar()}'`, closingStart)
+      }
+
       if (isComponent) {
         throw createError(`组件应使用 <//>  闭合，而不是 </${closingTag}>`, closeStart)
       }
+
       if (closingTag !== type) {
         throw createError(`标签不匹配: 开始标签 '${type}' 与结束标签 '${closingTag}' 不对应`, closeStart)
       }
+
       skipWhitespace()
-      if (currentChar as string !== '>') {
-        throw createError(`期望结束标签闭合符 '>'，但找到 '${currentChar || 'EOF'}'`)
+
+      if (source[pos] !== '>') {
+        throw createError(`期望结束标签闭合符 '>'，但找到 '${getCurrentChar()}'`, pos)
       }
-      next() // 跳过 >
+
+      pos++
     }
 
     // 构造节点
-    const node: {
-      type: string | Function,
-      props: {
-        [x: string]: any,
-        children?: any,
-      }
-    } = { type, props }
+    const node: any = { type, props }
     if (children.length > 0) {
       node.props.children = children.length === 1 ? children[0] : children
     }
@@ -317,29 +313,42 @@ export function jsx(strings: TemplateStringsArray, ...values: unknown[]): JSX.El
     return node
   }
 
-  // 主解析逻辑
-  try {
+  // 开始解析
+  skipWhitespace()
+
+  if (pos >= len) {
+    throw createError('JSX 不能为空')
+  }
+
+  if (source[pos] !== '<') {
+    throw createError('JSX 必须以标签符开始')
+  }
+
+  const rootNodes: any[] = []
+
+  while (pos < len) {
     skipWhitespace()
-    if (!currentChar) {
-      throw createError('JSX 不能为空')
-    }
-    if (currentChar !== '<') {
-      throw createError('JSX 必须以标签开始')
-    }
+    if (pos >= len) break
 
-    const result = parseNode()
-
-    skipWhitespace()
-    if (currentChar) {
-      throw createError(`根元素后存在多余内容 '${currentChar}'`)
+    if (source[pos] === '<') {
+      rootNodes.push(parseNode())
     }
-
-    return result
-  } catch (error) {
-    // 为所有错误添加源码信息
-    if (error instanceof Error && !error.message.includes('位置:')) {
-      throw createError(error.message)
+    else if (source[pos] === '\x00') {
+      rootNodes.push(readPlaceholder())
     }
-    throw error
+    else {
+      const text = readText()
+      if (text) rootNodes.push(text)
+    }
+  }
+
+  if (rootNodes.length === 0) {
+    throw createError('JSX 不能为空')
+  }
+  else if (rootNodes.length === 1) {
+    return rootNodes[0]
+  }
+  else {
+    return { type: 'fragment', props: { children: rootNodes } }
   }
 }
