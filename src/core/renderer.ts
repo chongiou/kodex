@@ -122,7 +122,7 @@ function hoistValue(name: string, value: any, scope: string, debug = false) {
   return `zdjl.getVar('${name}','${scope}')`
 }
 
-export function hoistSignal(signalGetter: SignalGetter, scope: string, context: RenderContext) {
+export function hoistSignal(signalGetter: SignalGetter, scope: string) {
   const name = generateUniqueId()
   createEffect(() => {
     const value = signalGetter()
@@ -153,16 +153,12 @@ function processText(value: any, context: RenderContext): [boolean, string] {
     if (typeof child === 'string') {
       result = hasReactive ? `'${child}'` : child
     } else if (typeof child === 'function') {
-      result = hoistSignal(child, context.scope, context)
+      result = hoistSignal(child, context.scope)
     }
     return index === 0 ? result : `+${result}`
   })
 
   return [hasReactive, parts.join('')]
-}
-
-function processSignal(value: any, context: RenderContext) {
-  return typeof value === 'function' ? hoistSignal(value, context.scope, context) : value
 }
 
 // 元素转换配置表
@@ -281,7 +277,7 @@ const ELEMENT_CONFIGS: Record<string, ElementConfig> = {
         {
           target: 'stringItems', source: 'options', convert: (value) => {
             return typeof value === 'function'
-              ? hoistSignal(value, context.scope, context)
+              ? hoistSignal(value, context.scope)
               : (Array.isArray(value) ? value : [''])
           }
         },
