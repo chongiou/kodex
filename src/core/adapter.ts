@@ -113,7 +113,7 @@ export const adapt = (
       if (propertyName && !context.reactiveProps.includes(propertyName)) {
         context.reactiveProps.push(propertyName)
       }
-      return hoistSignal(value, context.scope, context)
+      return hoistSignal(value, context.scope)
     }
     return value
   }
