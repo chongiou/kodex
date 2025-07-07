@@ -14,4 +14,4 @@ function jsx<T extends keyof JSX.IntrinsicElements | Function>(
 
 const Fragment = (props: any) => props.children
 
-export { jsx, jsx as jsxs, Fragment }
+export { jsx, jsx as jsxs, jsx as jsxDEV, Fragment }
