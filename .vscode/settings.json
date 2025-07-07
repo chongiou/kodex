@@ -6,9 +6,5 @@
     "sdcard",
     "zdjl"
   ],
-  // "emmet.triggerExpansionOnTab": false,
-  "emmet.showExpandedAbbreviation": "inMarkupAndStylesheetFilesOnly",
-  "commentTranslate.hover.enabled": false,
-  "commentTranslate.source": "Google",
-  "commentTranslate.targetLanguage": "zh-CN",
+  "emmet.showExpandedAbbreviation": "never",
 }
