@@ -252,7 +252,7 @@ const ELEMENT_CONFIGS: Record<string, ElementConfig> = {
     varType: 'bool',
     convert: (elem, context) => {
       return adapt(elem, context, [
-        { target: 'value', source: 'checked', convert: (value) => processSignal(value, context) }
+        { target: 'value', source: 'checked' }
       ])
     }
   },
@@ -286,7 +286,7 @@ const ELEMENT_CONFIGS: Record<string, ElementConfig> = {
           }
         },
         {
-          target: 'value', source: 'selected', convert: (value) => processSignal(value, context)
+          target: 'value', source: 'selected'
         }
       ])
     }
