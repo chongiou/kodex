@@ -24,7 +24,7 @@ const productionConfig = () =>
           'index': 'src/index.ts',
           'core': 'src/core/index.ts',
           'utils/jsx-parser': 'src/utils/jsx-parser.ts',
-          'utils/components': 'src/utils/components.tsx',
+          'components': 'src/components/index.ts',
           'jsx-runtime': 'src/jsx-runtime.ts',
         },
         formats: ['es', 'cjs'],
