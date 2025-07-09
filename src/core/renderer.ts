@@ -276,9 +276,11 @@ const ELEMENT_CONFIGS: Record<string, ElementConfig> = {
       return adapt(elem, context, [
         {
           target: 'stringItems', source: 'options', convert: (value) => {
-            return typeof value === 'function'
-              ? hoistSignal(value, context.scope)
-              : (Array.isArray(value) ? value : [''])
+            if (typeof value === 'function') {
+              return value
+            } else {
+              return Array.isArray(value) ? value : ['']
+            }
           }
         },
         {
