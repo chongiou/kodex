@@ -172,11 +172,12 @@ export function createSignal<T>(initialValue: T): [SignalGetter<T>, SignalSetter
 /**
  * 创建一个副作用，其回调函数会自动追踪所依赖的 signal，并在这些 signal 变化时重新运行
  */
-export function createEffect(callback: Function): Dispose {
+export function createEffect(callback: Function): [Dispose, boolean] {
   let isActive = true
   let version = 0
   const effectId = ++effectIdCounter
   const dependencies = new Set<SignalGetter>()
+  let hasDependencies = false
 
   const effect: Effect = Object.assign(
     async () => {
@@ -200,6 +201,9 @@ export function createEffect(callback: Function): Dispose {
       try {
         ReactiveContext.currentEffect = effect
         const result = callback()
+
+        // 直接更新依赖收集状态
+        hasDependencies = dependencies.size > 0
 
         if (result instanceof Promise) {
           const asyncResult = await result
@@ -256,7 +260,7 @@ export function createEffect(callback: Function): Dispose {
   // 立即执行副作用以建立初始依赖关系
   effect()
 
-  return cleanup
+  return [cleanup, hasDependencies] as const
 }
 
 /**

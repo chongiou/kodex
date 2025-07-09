@@ -33,10 +33,20 @@ export interface ChangeContext {
   cancel(): void
 }
 
+const contextStack: RenderContext[] = []
+
+export function getCurrentRenderContext(): RenderContext {
+  const context = contextStack[contextStack.length - 1]
+  if (!context) {
+    throw new Error('当前不在渲染上下文中，无法获取渲染上下文实例')
+  }
+  return context
+}
+
 export class RenderContext {
   public eventListeners = new Map<string, Function>()
   public cleanupFns: Function[] = []
-  public reactiveProps: string[] = []
+  private reactiveProps: string[] = []
   public reservedNames = new Map<string, string>()
   public owner: Owner = createOwner()
   public scope = `kodex.context.${generateUniqueId()}`
@@ -108,6 +118,10 @@ export class RenderContext {
     zdjl.clearVars(this.scope)
     zdjl.deleteVar(this.viewId)
     zdjl.deleteVar(this.eventEmitId)
+    const index = contextStack.indexOf(this)
+    if (index !== -1) {
+      contextStack.splice(index, 1)
+    }
   }
 }
 
@@ -122,16 +136,28 @@ function hoistValue(name: string, value: any, scope: string, debug = false) {
   return `zdjl.getVar('${name}','${scope}')`
 }
 
-export function hoistSignal(signalGetter: SignalGetter, scope: string) {
+export function hoistSignal(signalGetter: SignalGetter, onHoisted?: Function) {
+  if (typeof signalGetter !== 'function') {
+    throw new Error('不是信号')
+  }
+  const { scope } = getCurrentRenderContext()
   const name = generateUniqueId()
-  createEffect(() => {
-    const value = signalGetter()
+  let value: any
+  let [_, hasDependencies] = createEffect(() => {
+    value = signalGetter()
     hoistValue(name, value, scope)
   })
-  return `zdjl.getVar('${name}','${scope}')`
+  if (hasDependencies) {
+    if (onHoisted) onHoisted()
+    return `zdjl.getVar('${name}','${scope}')`
+  } else {
+    zdjl.deleteVar(name, scope)
+    return value
+  }
 }
 
-function hoistFunc(fn: Function, scope: string) {
+export function hoistFunc(fn: Function): string {
+  const { scope } = getCurrentRenderContext()
   const name = generateUniqueId()
   return hoistValue(name, fn, scope)
 }
@@ -153,7 +179,7 @@ function processText(value: any, context: RenderContext): [boolean, string] {
     if (typeof child === 'string') {
       result = hasReactive ? `'${child}'` : child
     } else if (typeof child === 'function') {
-      result = hoistSignal(child, context.scope)
+      result = hoistSignal(child)
     }
     return index === 0 ? result : `+${result}`
   })
@@ -204,7 +230,7 @@ const ELEMENT_CONFIGS: Record<string, ElementConfig> = {
         {
           target: 'action', source: 'onClick', convert() {
             if (elem.props.onClick) {
-              const funcExpr = hoistFunc(elem.props.onClick, context.scope)
+              const funcExpr = hoistFunc(elem.props.onClick)
               return createJsAction(`${funcExpr}(${context.dialogContext.dialogContextExpr})`)
             }
           }
@@ -301,6 +327,7 @@ const ELEMENT_CONFIGS: Record<string, ElementConfig> = {
 export class Renderer {
   render(rootComponent: JSX.Element, options: { storageId?: string } = {}) {
     const context = new RenderContext()
+    contextStack.push(context)
 
     return runWithOwner(context.owner, () => {
       const storageId = options.storageId ?? (typeof rootComponent.type === 'function' ? rootComponent.type.name : generateUniqueId())
@@ -321,7 +348,7 @@ export class Renderer {
 
     // 创建事件发射器
     const eventEmitter = context.createValueChangeEmitter()
-    const eventListenerFunc = hoistFunc(eventEmitter, context.scope)
+    const eventListenerFunc = hoistFunc(eventEmitter)
 
     // 创建变量和动作
     const vars = [
@@ -429,7 +456,7 @@ export class Renderer {
     if (children[0]?.type === 'button') {
       const btn = children[0]
       if (btn.props.onClick) {
-        result.exprForCancelCallback = `${hoistFunc(btn.props.onClick, context.scope)}()` // TODO: 如果要实现 close,这里需要判断是否是主动触发还是用户触发
+        result.exprForCancelCallback = `${hoistFunc(btn.props.onClick)}()` // TODO: 如果要实现 close,这里需要判断是否是主动触发还是用户触发
       }
       const [cancelTextIsReactive, cancelText] = processText(btn.props.children, context)
       result.cancelTextIsReactive = cancelTextIsReactive

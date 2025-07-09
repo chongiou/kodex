@@ -109,11 +109,12 @@ export const adapt = (
   }
   const processSignal = (value: any, adapterContext: AdapterContext) => {
     if (typeof value === 'function') {
-      const propertyName = adapterContext.targetPath[adapterContext.targetPath.length - 1]
-      if (propertyName && !context.reactiveProps.includes(propertyName)) {
-        context.reactiveProps.push(propertyName)
-      }
-      return hoistSignal(value, context.scope)
+      return hoistSignal(value, () => {
+        const propertyName = adapterContext.targetPath[adapterContext.targetPath.length - 1]
+        if (propertyName) {
+          context.addReactiveProperty(propertyName)
+        }
+      })
     }
     return value
   }
