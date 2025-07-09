@@ -38,7 +38,7 @@ declare global {
       }
       file: {}
       select: {
-        options?: any[] | SignalGetter<any[]>
+        options?: any[] | readonly any[] | SignalGetter<any[]>
         selected?: any | SignalGetter
       }
       position: {}

@@ -64,7 +64,7 @@ const testConfig = () =>
       minify: false,
       target: 'es2022',
       lib: {
-        entry: 'src/test/index.tsx',
+        entry: 'src/example/entry.test.tsx',
         formats: ['es'],
       },
       outDir: 'cache'
