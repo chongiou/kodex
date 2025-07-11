@@ -1,3 +1,5 @@
+import { contextStack, getCurrentRenderContext } from "./renderer"
+
 export interface SignalGetter<T = any> {
   (): T
 }
@@ -109,10 +111,17 @@ function processBatch() {
   }
 }
 
+interface SignalOptions {
+  /**
+   * 为信号命名, 这样的信号可以在 show 结果中取得其值
+   */
+  name?: string
+}
+
 /**
  * 创建一个响应式数据源（signal），包含一个 getter 和 setter
  */
-export function createSignal<T>(initialValue: T): [SignalGetter<T>, SignalSetter<T>] {
+export function createSignal<T>(initialValue: T, options: SignalOptions = {}): [SignalGetter<T>, SignalSetter<T>] {
   let value = initialValue
   const subscribers = new Set<Effect>()
 
@@ -164,6 +173,16 @@ export function createSignal<T>(initialValue: T): [SignalGetter<T>, SignalSetter
   // 预先注册信号（即使暂时没有订阅者）
   if (ReactiveContext.currentOwner) {
     ReactiveContext.currentOwner.signals.set(signalGetter, subscribers)
+  }
+
+  // NOTE: 耦合部分: 注册具名信号到渲染上下文
+  if (options.name) {
+    if (contextStack.length > 0) {
+      const context = getCurrentRenderContext()
+      context.signalManager.register(options.name, signalGetter)
+    } else {
+      console.warn('注册具名信号无效,不在渲染上下文内')
+    }
   }
 
   return [signalGetter, signalSetter]
