@@ -7,20 +7,6 @@ import { adapt } from './adapter'
 // note: 不需要抽象平台，因为它专门为特定的目标环境(zdjl)设计
 declare const zdjl: any
 
-export class DialogContext {
-  dialogContextExpr = ''
-  constructor(context: RenderContext) {
-    this.dialogContextExpr = hoistValue(
-      generateUniqueId(),
-      this,
-      context.scope
-    )
-  }
-  cancel() {
-    zdjl.runAction({ type: '按键', keyCode: 4 })
-  }
-}
-
 interface ElementConfig {
   varType: AllVariableTypes | ((elem: JSX.Element) => AllVariableTypes)
   convert: (elem: JSX.Element, context: RenderContext, varname: string) => Record<string, any>
@@ -30,10 +16,9 @@ export interface ChangeContext {
   path: string
   oldValue: unknown
   newValue: unknown
-  cancel(): void
 }
 
-const contextStack: RenderContext[] = []
+export const contextStack: RenderContext[] = []
 
 export function getCurrentRenderContext(): RenderContext {
   const context = contextStack[contextStack.length - 1]
@@ -52,9 +37,10 @@ export class RenderContext {
   public scope = `kodex.context.${generateUniqueId()}`
   public viewId = `view_${generateUniqueId()}`
   public eventEmitId = `eventEmit_${generateUniqueId()}`
-  public isUserCancel = true
-  public dialogContext = new DialogContext(this)
-
+  public signalManager = new SignalManager()
+  public isInternalCancel = false
+  public shouldRerender = false
+  
   private varCounter = 0
   private pathStack = ['view']
 
@@ -101,8 +87,7 @@ export class RenderContext {
         diff.forEach(async change => {
           const path = `view.${change.path}`
           const eventListener = this.eventListeners.get(path)
-          const ctx: ChangeContext = { ...change, cancel: () => this.dialogContext.cancel() }
-          if (eventListener) eventListener(ctx)
+          if (eventListener) eventListener({ ...change })
         })
       }
     }
@@ -110,11 +95,34 @@ export class RenderContext {
     return valueChangeEmitter
   }
 
+  cancelDialog() {
+    zdjl.runActionAsync({ type: '按键', keyCode: 4 })
+  }
+
+  closeDialog() {
+    this.isInternalCancel = true
+    this.cancelDialog()
+  }
+
+  rerender() {
+    this.shouldRerender = true
+    this.closeDialog()
+  }
+
+  checkAndResetRerender(): boolean {
+    if (this.shouldRerender) {
+      this.shouldRerender = false
+      return true
+    }
+    return false
+  }
+
   cleanup() {
     this.cleanupFns.forEach(fn => fn())
     this.cleanupFns = []
     this.eventListeners.clear()
     this.owner.dispose()
+    this.signalManager.clear()
     zdjl.clearVars(this.scope)
     zdjl.deleteVar(this.viewId)
     zdjl.deleteVar(this.eventEmitId)
@@ -231,7 +239,7 @@ const ELEMENT_CONFIGS: Record<string, ElementConfig> = {
           target: 'action', source: 'onClick', convert() {
             if (elem.props.onClick) {
               const funcExpr = hoistFunc(elem.props.onClick)
-              return createJsAction(`${funcExpr}(${context.dialogContext.dialogContextExpr})`)
+              return createJsAction(`${funcExpr}()`)
             }
           }
         },
@@ -344,7 +352,7 @@ export class Renderer {
     // 处理各部分
     const header = headerElement ? this.processHeader(headerElement, context) : { isReactive: false, title: undefined }
     const main = [this.processElement(mainElement, context)].flat()
-    const footer = footerElement ? this.processFooter(footerElement, context) : {}
+    const footer = this.processFooter(footerElement, context)
 
     // 创建事件发射器
     const eventEmitter = context.createValueChangeEmitter()
@@ -370,7 +378,7 @@ export class Renderer {
       })
     ]
 
-    const action = switchToVarModeForAction(
+    let action = switchToVarModeForAction(
       {
         type: '设置变量' as const,
         vars: vars,
@@ -391,10 +399,17 @@ export class Renderer {
         throw new Error('未处于目标环境,无法使用API: zdjl.runActionAsync')
       }
       try {
-        await zdjl.runActionAsync(action)
-        const raw: Record<string, any> = zdjl.getVar(context.viewId)
-        const input = this.processInput(raw, context)
-        return { raw, input }
+        while (true) {
+          await zdjl.runActionAsync(action)
+          if (context.checkAndResetRerender()) {
+            action = this.executeRender(rootComponent, context).action
+            continue
+          }
+          const raw: Record<string, any> = zdjl.getVar(context.viewId)
+          const input = this.processInput(raw, context)
+          const signals = context.signalManager.getAllValues()
+          return { raw, input, signals }
+        }
       } finally {
         context.cleanup()
       }
@@ -443,7 +458,7 @@ export class Renderer {
     return { isReactive, title }
   }
 
-  private processFooter(elem: JSX.Element, context: RenderContext) {
+  private processFooter(elem: JSX.Element | null, context: RenderContext) {
     const result: {
       exprForCancelCallback?: string
       cancelTextIsReactive?: boolean
@@ -451,13 +466,23 @@ export class Renderer {
       okTextIsReactive?: boolean
       okText?: string
     } = {}
-    const children = [elem.props.children].flat()
+    const children = elem ? [elem.props.children].flat() : null
+
+    // 预期的,即使没设置 footer 也设置取消回调
+    const cancelCallback = children?.[0].props.onClick as Function | null
+    const expr = hoistFunc(() => {
+      if (!context.isInternalCancel) {
+        if (cancelCallback) cancelCallback()
+      }
+    })
+    result.exprForCancelCallback = `${expr}()`
+
+    if (!children) {
+      return result
+    }
 
     if (children[0]?.type === 'button') {
       const btn = children[0]
-      if (btn.props.onClick) {
-        result.exprForCancelCallback = `${hoistFunc(btn.props.onClick)}()` // TODO: 如果要实现 close,这里需要判断是否是主动触发还是用户触发
-      }
       const [cancelTextIsReactive, cancelText] = processText(btn.props.children, context)
       result.cancelTextIsReactive = cancelTextIsReactive
       result.cancelText = cancelText
@@ -465,6 +490,7 @@ export class Renderer {
 
     if (children[1]?.type === 'button') {
       const btn = children[1]
+      // NOTE: 无视确认按钮的 onclick, 这里没必要实现
       const [okTextIsReactive, okText] = processText(btn.props.children, context)
       result.okTextIsReactive = okTextIsReactive
       result.okText = okText
@@ -570,3 +596,28 @@ export class Renderer {
 }
 
 export const render: typeof Renderer.prototype.render = (...args) => new Renderer().render(...args)
+
+export class SignalManager {
+  private namedSignals = new Map<string, SignalGetter[]>()
+
+  register(name: string, signal: SignalGetter) {
+    const signalsStored = this.namedSignals.get('name')
+    if (signalsStored) {
+      this.namedSignals.set(name, signalsStored.concat(signal))
+    } else {
+      this.namedSignals.set(name, [signal])
+    }
+  }
+
+  getAllValues() {
+    const values: Record<string, any> = {}
+    this.namedSignals.forEach((signals, name) => {
+      values[name] = signals.length > 1 ? signals.map(signal => signal()) : signals[0]()
+    })
+    return values
+  }
+
+  clear() {
+    this.namedSignals.clear()
+  }
+}
