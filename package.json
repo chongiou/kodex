@@ -44,13 +44,14 @@
     "build": "vite build && npm run build:dts",
     "test:build": "vite build --mode test",
     "test:watch": "nodemon",
-    "test:push": "node --import tsx scripts/push.ts cache/kodex.test.zjs to sdcard/自动精灵 ",
+    "test:push": "node --import tsx scripts/push.ts cache/kodex.test.zjs to adb://localhost:16416/sdcard/自动精灵 ",
     "prerelease": "npm version prerelease --preid=beta && git push origin main --tags",
     "postversion": "git push origin main --tags"
   },
   "devDependencies": {
     "@types/node": "^22.14.1",
     "@vitejs/plugin-react": "^4.4.1",
+    "axios": "^1.10.0",
     "dts-bundle-generator": "^9.5.1",
     "nodemon": "^3.1.10",
     "terser": "^5.39.2",
