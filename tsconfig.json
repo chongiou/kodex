@@ -5,6 +5,9 @@
       "@/*": [
         "./src/*"
       ],
+      "#/*": [
+        "./*"
+      ]
     },
     "jsx": "react-jsx",
     "jsxImportSource": "@",
@@ -20,6 +23,7 @@
     "preserveSymlinks": true,
     "skipLibCheck": false,
     "noUnusedLocals": true,
+    "forceConsistentCasingInFileNames": true,
     "types": [
       "node",
     ],
