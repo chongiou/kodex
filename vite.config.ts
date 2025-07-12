@@ -13,7 +13,8 @@ const productionConfig = () =>
     ],
     resolve: {
       alias: {
-        '@': path.resolve('src')
+        '@': path.resolve('src'),
+        '#': path.resolve('.')
       }
     },
     build: {
@@ -57,7 +58,8 @@ const testConfig = () =>
     ],
     resolve: {
       alias: {
-        '@': path.resolve('./src')
+        '@': path.resolve('./src'),
+        '#': path.resolve('.')
       }
     },
     build: {
@@ -67,7 +69,10 @@ const testConfig = () =>
         entry: 'src/example/entry.test.tsx',
         formats: ['es'],
       },
-      outDir: 'cache'
+      outDir: 'cache',
+      rollupOptions: {
+        external: ['fs'],
+      }
     },
   })
 
