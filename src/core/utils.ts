@@ -9,6 +9,11 @@ export const space = (width: number = 1, height: number = 1) => {
 /** 目标环境补丁, 用于设置 select 元素的 selected 值, 需要为 option 元素使用信号值 */
 export const optionsDecorator = <T extends any[] = any[]>([optionsGetter, optionsSetter]: [SignalGetter<T>, SignalSetter<T>]) => {
   // NOTE：当只剩下一个选项时，目标环境自动选中该选项，然后在 100ms 后恢复原来的选项(太快无效，原因未知)，完成选中指定值
+  /**
+   * 用于设置 select 元素的选中项
+   * @param selected 将选中的项目
+   * @remark ⚠️内部访问了选项的信号
+   */
   const setSelected = async (selected: T[number]) => {
     const cache = optionsGetter()
     optionsSetter([selected] as T[number])

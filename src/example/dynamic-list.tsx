@@ -1,4 +1,4 @@
-import { render, createSignal, hoistFunc, createEffect } from '@/index'
+import { render, createSignal, hoistFunc } from '@/index'
 
 type Todo = {
   title: string
@@ -7,8 +7,6 @@ type Todo = {
 }
 
 type FilterOption = 'all' | 'completed' | 'uncompleted'
-
-let resolvedTodoList: Todo[] = []
 
 const App = () => {
   const [tip, setTip] = createSignal('输入 Todo 标题')
@@ -24,16 +22,14 @@ const App = () => {
       completed: true,
       id: 1
     }
-  ])
+  ],
+    {
+      name: 'todos'
+    }
+  )
 
   const [filter, setFilter] = createSignal<FilterOption>('all')
   const filterOptions = ['all', 'completed', 'uncompleted'] as const
-
-  createEffect(() => {
-    // 每当 todos 信号变化时,该回调函数会重新执行,因此 resolvedTodoList 总是拿到最新的值
-    // 这是现阶段在组件外部获取信号值的唯一方法
-    resolvedTodoList = todos()
-  })
 
   const handleAddTodo = () => {
     if (newTodoText().replace(/\s/g, '') !== '') {
@@ -92,8 +88,8 @@ const App = () => {
 const dialog = render(<App />)
 
 if (typeof zdjl !== 'undefined') {
-  await dialog.show()
-  // zdjl.alert(JSON.stringify(resolvedTodoList, null, 2))
+  const res = await dialog.show()
+  console.log(res.signals.todos)
 } else {
   console.dir(dialog.vars, { depth: null })
 }
