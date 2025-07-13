@@ -1,4 +1,4 @@
-import type { SignalGetter, DialogContext } from '@/core'
+import type { SignalGetter } from '@/core'
 import type { CommonProps } from '@/core/target-env'
 
 type Text = string | SignalGetter | Function
@@ -9,10 +9,11 @@ declare global {
       [x: string]: any
       button: {
         children?: Text | Text[]
-        onClick?(ctx: DialogContext): void
+        onClick?(): void
         style?: {
           buttonStyle?: 'button' | 'link' | 'none'
         }
+        closeDialog?: boolean
       }
       checkbox: {
         checked?: boolean | SignalGetter<boolean> | Function

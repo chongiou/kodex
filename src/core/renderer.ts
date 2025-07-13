@@ -40,7 +40,7 @@ export class RenderContext {
   public signalManager = new SignalManager()
   public isInternalCancel = false
   public shouldRerender = false
-  
+
   private varCounter = 0
   private pathStack = ['view']
 
@@ -104,32 +104,39 @@ export class RenderContext {
     this.cancelDialog()
   }
 
-  rerender() {
+  /**
+   * 重渲染
+   * @param closeCurrentDialog 是否关闭当前弹窗, 默认 `true`. `false` 后可启用 `button` 元素的 `closeDialog` 加速关闭
+   */
+  rerender(closeCurrentDialog = true) {
     this.shouldRerender = true
-    this.closeDialog()
-  }
-
-  checkAndResetRerender(): boolean {
-    if (this.shouldRerender) {
-      this.shouldRerender = false
-      return true
-    }
-    return false
+    if (closeCurrentDialog) this.closeDialog()
   }
 
   cleanup() {
-    this.cleanupFns.forEach(fn => fn())
-    this.cleanupFns = []
-    this.eventListeners.clear()
-    this.owner.dispose()
-    this.signalManager.clear()
-    zdjl.clearVars(this.scope)
+    this.clearRenderResources()
     zdjl.deleteVar(this.viewId)
     zdjl.deleteVar(this.eventEmitId)
     const index = contextStack.indexOf(this)
     if (index !== -1) {
       contextStack.splice(index, 1)
     }
+  }
+
+  /**
+   * 清理无法复用的渲染资源以及重置某些状态
+   */
+  clearRenderResources() {
+    this.owner.dispose()
+    this.owner = createOwner()
+    this.eventListeners.clear()
+    this.varCounter = 0
+    this.pathStack = ['view']
+    this.reactiveProps = []
+    this.signalManager.clear()
+    this.shouldRerender = false
+    this.isInternalCancel = false
+    zdjl.clearVars(this.scope)
   }
 }
 
@@ -244,7 +251,7 @@ const ELEMENT_CONFIGS: Record<string, ElementConfig> = {
           }
         },
         { target: 'buttonStyle', source: 'style.buttonStyle' },
-        { target: 'closeDialogOnAction', defaultValue: false },
+        { target: 'closeDialogOnAction', source: 'closeDialog', defaultValue: false },
       ])
     }
   },
@@ -401,7 +408,8 @@ export class Renderer {
       try {
         while (true) {
           await zdjl.runActionAsync(action)
-          if (context.checkAndResetRerender()) {
+          if (context.shouldRerender) {
+            context.clearRenderResources()
             action = this.executeRender(rootComponent, context).action
             continue
           }
