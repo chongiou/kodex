@@ -67,7 +67,7 @@ export function parseJSX(strings: TemplateStringsArray, ...values: unknown[]): J
   function readIdentifier() {
     const start = pos
     while (pos < len && isAlphaNum(source[pos])) pos++
-    return pos > start ? source.slice(start, pos) : null
+    return pos > start ? source.slice(start, pos) : 'fragment'
   }
 
   function readString() {
