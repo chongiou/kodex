@@ -5,3 +5,4 @@ src/test
 *.test.*
 package-lock.json
 *.code-workspace
+.reload-count
