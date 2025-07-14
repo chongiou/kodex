@@ -128,7 +128,6 @@ export class RenderContext {
    */
   clearRenderResources() {
     this.owner.dispose()
-    this.owner = createOwner()
     this.eventListeners.clear()
     this.varCounter = 0
     this.pathStack = ['view']
@@ -410,7 +409,9 @@ export class Renderer {
           await zdjl.runActionAsync(action)
           if (context.shouldRerender) {
             context.clearRenderResources()
-            action = this.executeRender(rootComponent, context).action
+            runWithOwner(context.owner, () => {
+              action = this.executeRender(rootComponent, context).action
+            })
             continue
           }
           const raw: Record<string, any> = zdjl.getVar(context.viewId)

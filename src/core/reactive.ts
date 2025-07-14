@@ -285,7 +285,7 @@ export function createEffect(callback: Function): [Dispose, boolean] {
 /**
  * 创建计算属性 - 基于其他信号的派生值, 作用: 缓存计算结果, 避免重复计算
  */
-export function createComputed<T>(computation: () => T): SignalGetter<T> {
+export function createMemo<T>(computation: () => T): SignalGetter<T> {
   let value: T
   let isStale = true
   const [get, set] = createSignal<T>(undefined as any)
