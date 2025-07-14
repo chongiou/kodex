@@ -1,5 +1,4 @@
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
 import zdjl from 'vite-mjs-to-zjs'
 import path from 'path'
 import pkg from './package.json'
@@ -8,7 +7,6 @@ import { compress } from './plugin/compress'
 const productionConfig = () =>
   defineConfig({
     plugins: [
-      react({ jsxRuntime: 'automatic', jsxImportSource: path.resolve('src') }),
       compress(['.cjs'], ['index.cjs', 'jsx-runtime.cjs']),
     ],
     resolve: {
@@ -37,10 +35,6 @@ const productionConfig = () =>
 const testConfig = () =>
   defineConfig({
     plugins: [
-      react({
-        jsxRuntime: 'automatic',
-        jsxImportSource: path.resolve('src')
-      }),
       zdjl({
         output: {
           filename: 'kodex.test',

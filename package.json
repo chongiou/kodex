@@ -43,7 +43,7 @@
     "build:dts:index": "dts-bundle-generator --inline-declare-global -o dist/index.d.ts src/index.ts",
     "build": "vite build && npm run build:dts",
     "test:build": "vite build --mode test",
-    "test:watch": "nodemon",
+    "test:watch": "echo 0 > scripts/.reload-count && nodemon",
     "test:push": "node --import tsx scripts/push.ts cache/kodex.test.zjs to adb://localhost:16416/sdcard/自动精灵 ",
     "prerelease": "npm version prerelease --preid=beta && git push origin main --tags",
     "postversion": "git push origin main --tags"
