@@ -17,9 +17,34 @@ jobs:
     needs: call-shared-pipeline
     runs-on: ubuntu-latest
     steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          registry-url: "https://registry.npmjs.org"
+      
+      - name: Generate changelog
+        run: |
+          npm install -g auto-changelog
+          auto-changelog --unreleased false --backfill-limit false --commit-limit false
+      
+      - name: Extract release notes
+        id: extract_release_notes
+        uses: ffurrer2/extract-release-notes@v1
+        with:
+          changelog_file: CHANGELOG.md
+
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           name: Release ${{ github.ref_name }}
           tag_name: ${{ github.ref_name }}
           token: ${{ secrets.GITHUB_TOKEN }}
+          body: ${{ steps.extract_release_notes.outputs.release_notes }}
+          files: |
+            CHANGELOG.md
