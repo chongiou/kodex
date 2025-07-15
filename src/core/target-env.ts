@@ -140,7 +140,7 @@ export const createExpression = (expr: string) => {
 }
 
 export const createJsAction = (code: string) => {
-  return { type: '运行JS代码' as const, jsCode: code }
+  return { type: '运行JS代码' as const, jsCode: code, delay: 0 }
 }
 
 const move = (obj: Record<string, any>, prop: string) => {

@@ -67,7 +67,12 @@ export function parseJSX(strings: TemplateStringsArray, ...values: unknown[]): J
   function readIdentifier() {
     const start = pos
     while (pos < len && isAlphaNum(source[pos])) pos++
-    return pos > start ? source.slice(start, pos) : 'fragment'
+    if (pos > start) {
+      return source.slice(start, pos)
+    } else if (source[pos] === '>' || source[pos] === ' ') {
+      return 'fragment'
+    }
+    return null
   }
 
   function readString() {
@@ -223,7 +228,7 @@ export function parseJSX(strings: TemplateStringsArray, ...values: unknown[]): J
       const tagStart = pos
       type = readIdentifier()
       if (!type) {
-        throw createError(`标签名不能为空，期望字母或数字，但找到 '${getCurrentChar()}'`, tagStart)
+        throw createError(`无效的标签名，期望字母或数字，但找到 '${getCurrentChar()}'`, tagStart)
       }
     }
 
