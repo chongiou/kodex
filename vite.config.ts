@@ -2,13 +2,9 @@ import { defineConfig } from 'vite'
 import zdjl from 'vite-mjs-to-zjs'
 import path from 'path'
 import pkg from './package.json'
-import { compress } from './plugin/compress'
 
 const productionConfig = () =>
   defineConfig({
-    plugins: [
-      compress(['.cjs'], ['index.cjs', 'jsx-runtime.cjs']),
-    ],
     resolve: {
       alias: {
         '@': path.resolve('src'),
@@ -22,14 +18,40 @@ const productionConfig = () =>
         entry: {
           'index': 'src/index.ts',
           'core': 'src/core/index.ts',
-          'utils/jsx-parser': 'src/utils/jsx-parser.ts',
           'components': 'src/components/index.ts',
           'jsx-runtime': 'src/jsx-runtime.ts',
         },
-        formats: ['es', 'cjs'],
+        formats: ['es'],
       },
       target: 'es2022'
-    }
+    },
+  })
+
+const productionConfigForZdjl = () =>
+  defineConfig({
+    resolve: {
+      alias: {
+        '@': path.resolve('src'),
+        '#': path.resolve('.')
+      }
+    },
+    build: {
+      minify: true,
+      outDir: 'dist/zdjl',
+      lib: {
+        entry: {
+          'index': 'src/zdjl/index.ts',
+          'core': 'src/core/index.ts',
+          'jsx-parser': 'src/utils/jsx-parser.ts',
+          'components': 'src/components/index.ts',
+        },
+        formats: ['cjs'],
+        fileName(format, entryName) {
+          return entryName + '.min.cjs'
+        },
+      },
+      target: 'es2022'
+    },
   })
 
 const testConfig = () =>
@@ -73,7 +95,11 @@ const testConfig = () =>
 export default defineConfig(({ mode }) => {
   if (mode === 'test') {
     return testConfig()
-  } else {
-    return productionConfig()
   }
+
+  if (mode === 'zdjl') {
+    return productionConfigForZdjl()
+  }
+
+  return productionConfig()
 })
