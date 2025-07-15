@@ -2,6 +2,16 @@
 
 Kodex 是一个运行时 DSL UI 渲染引擎，它通过 JSX 这种声明式语法，将 UI 描述转换为目标环境( `zdjl` )的具体实现，提供了从组件定义到最终渲染的完整解决方案。
 
+<div align="center">
+
+[![CodeFactor](https://www.codefactor.io/repository/github/chongiou/kodex/badge)](https://www.codefactor.io/repository/github/chongiou/kodex)
+![npm version](https://img.shields.io/npm/v/@zdjl/kodex)
+![npm downloads](https://img.shields.io/npm/dm/@zdjl/kodex)
+![CI/CD](https://img.shields.io/github/actions/workflow/status/chongiou/kodex/.github/workflows/release.yml)
+![TypeScript](https://img.shields.io/badge/TypeScript-5.8+-blue)
+
+</div>
+
 ## 🌱社区资源
 
 - [1027734941](https://qm.qq.com/q/k5IkZNKJ3i)：官方交流群
@@ -13,6 +23,41 @@ Kodex 是一个运行时 DSL UI 渲染引擎，它通过 JSX 这种声明式语�
 - **组件化开发**: 使用可复用的组件构建复杂界面
 - **声明式语法**: 用简洁的标记语言描述界面结构
 - **事件处理**: 按钮交互与值更改事件响应
+- **干净的开发空间**: 不会打扰你的全局对象和脚本作用域
+
+## 🚀 快速体验
+使用 `kodex` 可以不必经过编译步骤，可以使用独立工具解析 `JSX` 字符串，因此你可以直接在自动精灵环境，想要快速体验只需要运行下面的代码即可。
+> [!NOTE] 
+> ⚠️ 请注意，虽然 `/zdjl/index.min.cjs` 很小，不到 `23kb` ，经网络压缩(gzip)后不到 `10kb` ，但仍然需要您的网络情况良好。
+
+```js
+globalThis.zdjl = zdjl // 让模块能访问到
+const { 
+  parseJSX: jsx,
+  createSignal, 
+  render,
+} = require(`@zdjl/kodex@latest/dist/zdjl/index.min.cjs`)
+
+function MyComponent (props) {
+  return jsx`<text extraTextAbove=${props.tip}>${props.children}</text>`
+}
+
+function Counter () {
+  const [count, setCount] = createSignal(0)
+
+  return jsx`
+    <>
+      <input type='text' name='user_in' value=${count}></input>
+      <${MyComponent} tip='计数:'>${count}<//>
+      <button onClick=${() => setCount(count() + 1)}>增加计数</button>
+    </>
+  `
+}
+
+const counterDialog = render(jsx`<${Counter}><//>`)
+const res = await counterDialog.show()
+zdjl.alert(JSON.stringify(res.input, null, 2)) // -> { "user_in": number }
+```
 
 ## 🚀 快速开始
 
@@ -21,6 +66,7 @@ Kodex 是一个运行时 DSL UI 渲染引擎，它通过 JSX 这种声明式语�
 - **组件 (Component)**: 组件是可复用的 UI 单元，类似 HTML 标签但功能更强大。  
 - **响应式数据**: 当数据发生变化时，界面会自动更新以反映这些变化。  
 - **事件处理**: 当用户与界面交互时（如点击按钮），可以触发相应的处理函数。
+- **JSX**: JS 的扩展语法, 它允许你在 JS 中使用类似 HTML 的语法, 但最终需要转换为 JS 函数才能运行
 
 ## 安装
 
@@ -38,6 +84,9 @@ import {} from '@zdjl/kodex'
 
 ## 配置开发环境
 [配置开发环境](./docs/DevEnvSetup.md)
+
+> [!NOTE]
+> ⚠️ 使用 kodex 并不是必须经过编译环节。使用手机开发的用户请直接查看 "配置开发环境" 方式二
 
 ### 创建你的第一个界面
 
@@ -153,3 +202,4 @@ MIT
 
 ## 这怎么可能?
 (TODO:此主题介绍原理和实现细节,待完成)
+> 想要我说些什么？可以在自动精灵评论区或群内许愿

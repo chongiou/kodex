@@ -49,17 +49,12 @@ code ./
 配置参考:
 ```js
 import { defineConfig } from 'vite'
-import react from '@vitejs/plugin-react'
 import zdjl from 'vite-mjs-to-zjs'
 import path from 'path'
 import pkg from './package.json'
 
 export default defineConfig({
   plugins: [
-    react({
-      jsxRuntime: 'automatic',
-      jsxImportSource: '@zdjl/kodex'
-    }),
     zdjl({
       output: {
         filename: pkg.name,
@@ -188,14 +183,13 @@ npx vite build
 你可以在无编译环境中使用 Kodex，Kodex 发布的包中有独立工具可以解析 JSX 字符串。通过这个工具，你不需要事先编译 JSX 代码。它类似 Lit 框架的开发体验，但更简易，且没有类型和高亮。
 
 以 `zdjl` 环境为例，通过该工具可做到开箱即用
-> 由于还未正式发布, 此处使用 beta 版本
 
 ```js
-const { createSignal, render } = require(`@zdjl/kodex@beta/dist/core.min.cjs`)
-const { jsx } = require(`@zdjl/kodex@beta/dist/utils/jsx-parser.min.cjs`)
+const { createSignal, render } = require(`@zdjl/kodex/dist/core.min.cjs`)
+const { parseJSX: jsx } = require(`@zdjl/kodex/dist/utils/jsx-parser.min.cjs`)
 globalThis.zdjl = zdjl // 暴露到全局，让模块能访问到
 
- function MyComponent (props) {
+function MyComponent (props) {
   return jsx`<text extraTextAbove=${props.tip}>${props.children}</text>`
 }
 
@@ -225,7 +219,6 @@ console.log(res.input)
 ### 语法规则和限制
 
 标签：
-- 必须使用双标签形式，不支持单标签
 - 组件闭合：可以使用 `<//>` 闭合自定义组件
 - 动态值：使用 `${expression}` 插入动态值
 
@@ -241,4 +234,3 @@ console.log(res.input)
 - 开始标签和结束标签必须匹配（组件使用 `<//>` 闭合）
 - 动态值必须是有效的占位符
 - 展开属性必须是一个对象
-- 不支持单标签语法（如 `<input />`）
