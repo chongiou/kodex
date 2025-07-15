@@ -11,5 +11,5 @@
     "cache"
   ],
   "quiet": true,
-  "exec": "npm --silent run test:build -- --logLevel warn && node --import tsx scripts/reload-notify.ts"
+  "exec": "npm --silent run test:build -- --logLevel warn && npm --silent run test:push && node --import tsx scripts/reload-notify.ts"
 }
