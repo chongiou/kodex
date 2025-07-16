@@ -3,6 +3,7 @@ on:
   push:
     tags:
       - "v[0-9]+.[0-9]+.[0-9]+"
+    workflow_dispatch: {}
 
 jobs:
   call-shared-pipeline:
@@ -31,13 +32,18 @@ jobs:
       - name: Generate changelog
         run: |
           npm install -g auto-changelog
-          auto-changelog --unreleased false --backfill-limit false --commit-limit false
+          auto-changelog --unreleased false --backfill-limit false --commit-limit false --starting-version v1.0.4
       
       - name: Extract release notes
         id: extract_release_notes
-        uses: ffurrer2/extract-release-notes@v1
-        with:
-          changelog_file: CHANGELOG.md
+        run: |
+          RELEASE_TAG="${{ github.ref_name }}"
+          # 去掉前缀 v
+          CLEAN_TAG="${RELEASE_TAG#v}"
+          RELEASE_NOTES=$(awk "/## \\[?$CLEAN_TAG\\]?/{flag=1;next}/^## /{flag=0}flag" CHANGELOG.md)
+          echo "release_notes<<EOF" >> $GITHUB_OUTPUT
+          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
