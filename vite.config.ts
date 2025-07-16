@@ -44,6 +44,7 @@ const productionConfigForZdjl = () =>
           'core': 'src/core/index.ts',
           'jsx-parser': 'src/utils/jsx-parser.ts',
           'components': 'src/components/index.ts',
+          'elementFactory': 'src/utils/elementFactory.ts'
         },
         formats: ['cjs'],
         fileName(format, entryName) {
