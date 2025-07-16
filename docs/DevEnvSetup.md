@@ -1,5 +1,3 @@
-(本页面施工中，可能有遗漏或错误)
-
 # 配置 Kodex 的开发环境
 
 Kodex 的目标是在 `zdjl` 上运行，我们有两种方式可以选:
@@ -7,169 +5,20 @@ Kodex 的目标是在 `zdjl` 上运行，我们有两种方式可以选:
 2. 在原生环境使用 Kodex，从网络或本地加载 Kodex，直接在 `zdjl` 环境使用 `jsx` 字符串语法
 
 ## 方式一
-### 创建项目
+### 使用 cli 创建项目 - 需安装 nodejs，可选安装 adb
 
-打开终端
-创建并进入项目文件夹 - 此处以 abc 文件夹名称为例
-
-```sh
-mkdir abc; cd abc
-```
-
-初始化 npm 包
+打开终端  
+进入你存放项目的文件夹
 
 ```sh
-npm init -y
+npm init kodex-app@latest
 ```
-
-安装相关依赖
-
+或
 ```sh
-npm i @zdjl/kodex
+npx create kodex-app@latest
 ```
 
-```sh
-npm i -D vite vite-mjs-to-zjs @vitejs/plugin-react @types/node
-```
-
-- `@vitejs/plugin-react` 用于编译 `JSX` 代码为 `JSX` 工厂函数调用
--  `vite-mjs-to-zjs` 用于打包 `JS` 文件到 `zjs` 文件，更多用法请查看[其 Github 页面](https://github.com/chongiou/vite-mjs-to-zjs)
-- `@types/node` 为 node 模块提供类型
-
-打开项目 (需安装 vscode)
-
-```sh
-code ./
-```
-
-### 配置 vite
-
-在项目根目录创建文件 `vite.config.js` 或 `vite.config.ts`
-
-配置参考:
-```js
-import { defineConfig } from 'vite'
-import zdjl from 'vite-mjs-to-zjs'
-import path from 'path'
-import pkg from './package.json'
-
-export default defineConfig({
-  plugins: [
-    zdjl({
-      output: {
-        filename: pkg.name,
-        formats: ['zjs']
-      },
-      manifest: {
-        description: `\
-          构建日期: ${new Date().toLocaleString()}
-          版本: ${pkg.version}
-          作者: ${pkg.author}
-          许可证: ${pkg.license}`.replace(/[^\S\n]{2,}/g, ''),
-        count: 'unknown',
-      }
-    }),
-  ],
-  resolve: {
-    alias: {
-      '@': path.resolve('./src')
-    },
-  },
-  build: {
-    minify: false,
-    target: 'es2022',
-    lib: {
-      entry: 'src/index.tsx',
-      formats: ['es'],
-    },
-    outDir: 'dist',
-  },
-})
-```
-
-### 配置 Typescript （JSX 类型提示）
-在项目根目录创建文件 `tsconfig.json`
-
-配置参考:
-```json
-{
-  "compilerOptions": {
-    "paths": {
-      "@/*": [
-        "./src/*"
-      ],
-    },
-    "jsx": "react-jsx",
-    "jsxImportSource": "@zdjl/kodex",
-    "moduleResolution": "bundler",
-    "module": "ES2022",
-    "target": "ES2022",
-    "declaration": true,
-    "lib": [
-      "ES2020",
-      "DOM"
-    ],
-    "outDir": "dist",
-    "strict": true,
-    "skipLibCheck": false,
-    "noUnusedLocals": true,
-  },
-  "include": [
-    "src"
-  ],
-  "exclude": [
-    "node_modules",
-    "dist"
-  ]
-}
-
-```
-
-创建项目入口 `src/index.tsx`
-
-示例代码:
-
-```jsx
-import { render, createSignal, onMount, onCleanup } from '@zdjl/kodex'
-
-declare const zdjl: any
-
-const App = () => {
-  const [count, setCount] = createSignal(0)
-  
-  let interval: NodeJS.Timeout
-
-  onMount(() => {
-    zdjl.alert("App mounted")
-    interval = setInterval(() => {
-      setCount(prev => prev + 1)
-    }, 1000)
-  })
-
-  onCleanup(() => {
-    zdjl.alert("App unmounted")
-    clearInterval(interval)
-  })
-  
-  return (
-    <root>
-      <header>Hello Kodex!</header>
-      <main>
-        <text>Count is {count}</text>
-      </main>
-      <footer>
-        <button>none</button>
-      </footer>
-    </root>
-  )
-}
-
-const res = render(<App />)
-await res.show()
-
-```
-
-### 编译
+#### 编译
 
 打开终端，输入命令
 
@@ -185,9 +34,12 @@ npx vite build
 以 `zdjl` 环境为例，通过该工具可做到开箱即用
 
 ```js
-const { createSignal, render } = require(`@zdjl/kodex/dist/core.min.cjs`)
-const { parseJSX: jsx } = require(`@zdjl/kodex/dist/utils/jsx-parser.min.cjs`)
-globalThis.zdjl = zdjl // 暴露到全局，让模块能访问到
+globalThis.zdjl = zdjl // 让模块能访问到
+const { 
+  parseJSX: jsx,
+  createSignal, 
+  render,
+} = require(`@zdjl/kodex@latest/dist/zdjl/index.min.cjs`)
 
 function MyComponent (props) {
   return jsx`<text extraTextAbove=${props.tip}>${props.children}</text>`
@@ -196,18 +48,20 @@ function MyComponent (props) {
 function Counter () {
   const [count, setCount] = createSignal(0)
 
+  // 使用 <//> 结束组件标签，因为需要传递 children 属性（count）
   return jsx`
     <>
-      <input type='text' name='user_in' value=${count}></input>
+      <input type='text' name='user_in' value=${count} />
       <${MyComponent} tip='计数:'>${count}<//>
       <button onClick=${() => setCount(count() + 1)}>增加计数</button>
     </>
   `
 }
 
-const counterDialog = render(jsx`<${Counter}><//>`)
+// 使用单标签结束组件，因为不需要传递 children 属性
+const counterDialog = render(jsx`<${Counter} />`) 
 const res = await counterDialog.show()
-console.log(res.input)
+console.log(res.input)  // -> { "user_in": number }
 ```
 
 上面这个例子展示了如何在无编译环境中：嵌套组件、传递静态属性、传递信号、设定事件

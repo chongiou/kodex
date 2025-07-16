@@ -1,15 +1,27 @@
+<div align="center">
+  <img src="./docs/images/logo.png" width=300/>
+</div>
+
 # Kodex
 
 Kodex 是一个运行时 DSL UI 渲染引擎，它通过 JSX 这种声明式语法，将 UI 描述转换为目标环境( `zdjl` )的具体实现，提供了从组件定义到最终渲染的完整解决方案。
 
 <div align="center">
-
-[![CodeFactor](https://www.codefactor.io/repository/github/chongiou/kodex/badge)](https://www.codefactor.io/repository/github/chongiou/kodex)
-![npm version](https://img.shields.io/npm/v/@zdjl/kodex)
-![npm downloads](https://img.shields.io/npm/dm/@zdjl/kodex)
-![CI/CD](https://img.shields.io/github/actions/workflow/status/chongiou/kodex/.github/workflows/release.yml)
-![TypeScript](https://img.shields.io/badge/TypeScript-5.8+-blue)
-
+  <table>
+    <tr>
+      <td>
+        <a href="https://www.codefactor.io/repository/github/chongiou/kodex"><img src="https://www.codefactor.io/repository/github/chongiou/kodex/badge" alt="CodeFactor"></a>
+      </td>
+      <td>
+        <img src="https://img.shields.io/npm/v/@zdjl/kodex" alt="npm version"></td>
+      <td>
+        <img src="https://img.shields.io/npm/dm/@zdjl/kodex" alt="npm downloads"></td>
+      <td>
+        <img src="https://img.shields.io/github/actions/workflow/status/chongiou/kodex/.github/workflows/release.yml" alt="CI/CD"></td>
+      <td>
+        <img src="https://img.shields.io/badge/TypeScript-5.8+-blue" alt="TypeScript"></td>
+    </tr>
+  </table>
 </div>
 
 ## 🌱社区资源
@@ -47,14 +59,14 @@ function Counter () {
 
   return jsx`
     <>
-      <input type='text' name='user_in' value=${count}></input>
+      <input type='text' name='user_in' value=${count} />
       <${MyComponent} tip='计数:'>${count}<//>
       <button onClick=${() => setCount(count() + 1)}>增加计数</button>
     </>
   `
 }
 
-const counterDialog = render(jsx`<${Counter}><//>`)
+const counterDialog = render(jsx`<${Counter} />`)
 const res = await counterDialog.show()
 zdjl.alert(JSON.stringify(res.input, null, 2)) // -> { "user_in": number }
 ```
@@ -85,8 +97,8 @@ import {} from '@zdjl/kodex'
 ## 配置开发环境
 [配置开发环境](./docs/DevEnvSetup.md)
 
-> [!NOTE]
-> ⚠️ 使用 kodex 并不是必须经过编译环节。使用手机开发的用户请直接查看 "配置开发环境" 方式二
+> [!TIP]
+> 使用 kodex 并不是必须经过编译环节。使用手机开发的小可爱请直接查看 "配置开发环境" 方式二
 
 ### 创建你的第一个界面
 
