@@ -38,12 +38,9 @@ jobs:
         id: extract_release_notes
         run: |
           RELEASE_TAG="${{ github.ref_name }}"
-          # 去掉前缀 v
           CLEAN_TAG="${RELEASE_TAG#v}"
-          RELEASE_NOTES=$(awk "/## \\[?$CLEAN_TAG\\]?/{flag=1;next}/^## /{flag=0}flag" CHANGELOG.md)
-          echo "release_notes<<EOF" >> $GITHUB_OUTPUT
-          echo "$RELEASE_NOTES" >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
+          # 运行 Node.js 脚本提取发布说明
+          node scripts/extract-release-notes.js "$CLEAN_TAG"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
