@@ -35,11 +35,16 @@ npx vite build
 
 ```js
 globalThis.zdjl = zdjl // 让模块能访问到
+
 const { 
-  parseJSX: jsx,
   createSignal, 
   render,
-} = require(`@zdjl/kodex@latest/dist/zdjl/index.min.cjs`)
+  elementFactory: elem
+} = require(`@zdjl/kodex@1.1.1/dist/zdjl/index.min.cjs`)
+
+const { 
+  parseJSX: jsx
+} = require(`@zdjl/kodex@1.1.1/dist/zdjl/jsx-parser.min.cjs`)
 
 function MyComponent (props) {
   return jsx`<text extraTextAbove=${props.tip}>${props.children}</text>`

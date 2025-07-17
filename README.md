@@ -38,25 +38,35 @@ Kodex 是一个运行时 DSL UI 渲染引擎，它通过 JSX 这种声明式语�
 - **干净的开发空间**: 不会打扰你的全局对象和脚本作用域
 
 ## 🚀 快速体验
-使用 `kodex` 可以不必经过编译步骤，可以使用独立工具解析 `JSX` 字符串，因此你可以直接在自动精灵环境，想要快速体验只需要运行下面的代码即可。
+使用 `kodex` 可以不必经过编译步骤，可以使用独立工具解析 `JSX` 字符串，因此你可以直接在自动精灵环境开发，想要快速体验只需要运行下面的代码即可。
 > [!NOTE] 
-> ⚠️ 请注意，虽然 `/zdjl/index.min.cjs` 很小，不到 `23kb` ，经网络压缩(gzip)后不到 `10kb` ，但仍然需要您的网络情况良好。
+> ⚠️ 请注意，虽然 `/zdjl/index.min.cjs` + `/zdjl/jsx-parser.min.cjs` 很小，不到 `23kb` ，经网络压缩(gzip)后不到 `10kb` ，但仍然需要您的网络情况良好。  
+> ⚠️ `http://npm-cdn.zdjl.cc/` 在浏览器很快，但在自动精灵里很慢！
 
 ```js
 globalThis.zdjl = zdjl // 让模块能访问到
+
+// 由于自动精灵不识别条件导入，您需要精确到文件名
 const { 
-  parseJSX: jsx,
   createSignal, 
   render,
-} = require(`@zdjl/kodex@latest/dist/zdjl/index.min.cjs`)
+  elementFactory: elem
+} = require(`@zdjl/kodex@1.1.1/dist/zdjl/index.min.cjs`)
 
+const { 
+  parseJSX: jsx
+} = require(`@zdjl/kodex@1.1.1/dist/zdjl/jsx-parser.min.cjs`)
+
+// 一个自定义组件
 function MyComponent (props) {
   return jsx`<text extraTextAbove=${props.tip}>${props.children}</text>`
 }
 
+// 根组件
 function Counter () {
   const [count, setCount] = createSignal(0)
 
+  // 使用 JSX 字符串解析器构造 JSX 结构树
   return jsx`
     <>
       <input type='text' name='user_in' value=${count} />
@@ -64,6 +74,17 @@ function Counter () {
       <button onClick=${() => setCount(count() + 1)}>增加计数</button>
     </>
   `
+
+  // 或者使用 elementFactory 构造 JSX 结构树
+  // 语法是 elementFactory.元素名称(子元素).属性(值).属性(值)
+  // 生成的内容和上面的是一样的，但有些许差异，使用 build() 结束链式调用
+  // userCompo 的全称是 useComponent, 这个缩写在相关领域挺常见，但避免误会所以注释
+
+  // return elem.fragment(
+  //   elem.input().type('text').name('user_in').value(count),
+  //   elem.useComp(MyComponent, count).tip('计数'),
+  //   elem.button('增加计数').onClick(() => setCount(count() + 1))
+  // )
 }
 
 const counterDialog = render(jsx`<${Counter} />`)
