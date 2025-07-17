@@ -50,7 +50,7 @@
     "test:watch": "echo 0 > scripts/.reload-count && nodemon",
     "test:push": "node --import tsx scripts/push.ts cache/kodex.test.zjs to adb://localhost:16416/sdcard/自动精灵 ",
     "prerelease": "npm version prerelease --preid=beta && git push origin main --tags",
-    "preversion": "changelog",
+    "preversion": "npm run changelog",
     "mbbs": "node --import tsx scripts/mbbs/release.ts",
     "postversion": "git push origin main --tags",
     "changelog": "auto-changelog --commit-limit false --unreleased true --starting-version v1.0.4 -o docs/CHANGELOG.md"
