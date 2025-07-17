@@ -6,3 +6,4 @@ src/test
 package-lock.json
 *.code-workspace
 .reload-count
+scripts/mbbs
