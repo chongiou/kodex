@@ -531,7 +531,11 @@ export class Renderer {
 
     for (const element of elements) {
       if (!element) continue
-      const processed = this.processElement(element, context)
+      const processed = this.processElement(
+        // @ts-expect-error
+        element[Symbol.for('kodex.chain')] ? element.build() : element,
+        context
+      )
       if (Array.isArray(processed)) {
         vars.push(...processed)
       } else if (processed) {
